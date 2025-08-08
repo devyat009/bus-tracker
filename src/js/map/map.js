@@ -23,8 +23,8 @@
 
     // Create the map centered on Brasília
     const map = L.map('map', {
-        tap: false,            // disable tap to reduce drag-on-click issues on mobile
-        tapTolerance: 60,      // larger tap tolerance
+        tap: false,
+        tapTolerance: 60,
         zoomSnap: 0.25,
         zoomDelta: 0.5
     }).setView([-15.7801, -47.9292], 12);
@@ -37,7 +37,8 @@
 
     // WFS/WMS endpoints
     const USE_PROXY = false;
-    log('CONFIG', `USE_PROXY=${USE_PROXY}`);
+    const ALLOW_WMS_MAP_CLICK = false; // only markers/overlays are clickable in fallback
+    log('CONFIG', `USE_PROXY=${USE_PROXY}, ALLOW_WMS_MAP_CLICK=${ALLOW_WMS_MAP_CLICK}`);
 
     const WFS_BASE = USE_PROXY ? '/proxy/wfs' : 'https://geoserver.semob.df.gov.br/geoserver/semob/ows';
     const wmsUrl = USE_PROXY ? '/proxy/wms' : 'https://geoserver.semob.df.gov.br/geoserver/semob/wms';
@@ -130,6 +131,9 @@
         disableClusteringAtZoom: 17
     }).addTo(map);
 
+    // Extra layer: big clickable buttons over bus stops to ease tapping
+    const stopHitLayer = L.layerGroup().addTo(map);
+
     // Replace GeoJSON layers to feed into clusters
     let busStopsLayer = L.geoJSON(null, {
         pointToLayer: (feature, latlng) => L.marker(latlng, {
@@ -140,17 +144,19 @@
             keyboard: true
         }),
         onEachFeature: (feature, layer) => {
-            layer.bindPopup(buildStopPopup(feature.properties || {}));
+            // Use compact card popup (descricao + codigo)
+            layer.bindPopup(buildStopMiniCard(feature.properties || {}));
+
+            // Add a bigger clickable overlay button on top of the stop
+            const props = feature.properties || {};
+            const latlng = layer.getLatLng();
+            const hit = createStopHitMarker(latlng, props);
+            stopHitLayer.addLayer(hit);
+
             const stopDrag = () => map.dragging.disable();
             const startDrag = () => map.dragging.enable();
-            layer.on('mousedown touchstart', (e) => {
-                stopDrag();
-                if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
-            });
-            layer.on('mouseup touchend', (e) => {
-                startDrag();
-                if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
-            });
+            layer.on('mousedown touchstart', (e) => { stopDrag(); if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent); });
+            layer.on('mouseup touchend', (e) => { startDrag(); if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent); });
         }
     });
 
@@ -208,7 +214,7 @@
                 const dataRows = rows.slice(1);
                 const codes = new Set();
                 dataRows.forEach(row => {
-                    const cols = row.split(',');
+                    const cols = row.includes(';') ? row.split(';') : row.split(',');
                     const cd = (cols[3] || '').trim();
                     if (cd) codes.add(cd);
                 });
@@ -255,52 +261,7 @@
         refreshStatusEl.className = `d-block mt-2 small ${ok ? 'text-success' : 'text-danger'}`;
     }
 
-    // Optional WMS fallback if WFS fails (non-clickable)
-    // const wmsUrl = 'https://geoserver.semob.df.gov.br/geoserver/semob/wms';
-    let stopsWmsFallback = null;
-    let busesWmsFallback = null;
-    let wmsClickAttached = false;
-
-    function wmsGetFeatureInfoUrl(layer, latlng) {
-        const point = map.latLngToContainerPoint(latlng, map.getZoom());
-        const size = map.getSize();
-        const b = map.getBounds();
-        const sw = map.options.crs.project(b.getSouthWest());
-        const ne = map.options.crs.project(b.getNorthEast());
-        const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
-        const params = { request: 'GetFeatureInfo', service: 'WMS', srs: 'EPSG:3857', styles: layer.wmsParams.styles || '', transparent: layer.wmsParams.transparent, version: '1.1.1', format: layer.wmsParams.format, bbox, height: size.y, width: size.x, layers: layer.wmsParams.layers, query_layers: layer.wmsParams.layers, info_format: 'text/html', x: Math.trunc(point.x), y: Math.trunc(point.y) };
-        const url = wmsUrl + L.Util.getParamString(params, wmsUrl, true);
-        log('WMS', 'GetFeatureInfo URL', url);
-        return url;
-    }
-
-    function attachWmsClick() {
-        if (wmsClickAttached) return;
-        log('WMS', 'attachWmsClick');
-        map.on('click', (e) => {
-            const layersToQuery = [busesWmsFallback, stopsWmsFallback].filter(Boolean);
-            log('WMS', 'map click', { latlng: e.latlng, layers: layersToQuery.length });
-            if (!layersToQuery.length) return;
-            const url = wmsGetFeatureInfoUrl(layersToQuery[0], e.latlng);
-            const html = `<iframe src="${url}" style="border:0;width:320px;height:220px"></iframe>` + `<div class="mt-1"><a target="_blank" rel="noopener" href="${url}">abrir detalhes</a></div>`;
-            L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
-        });
-        wmsClickAttached = true;
-    }
-
-    function applyWmsBusFilter() {
-        if (!busesWmsFallback) return;
-        if (selectedLines.size) {
-            const list = Array.from(selectedLines).map(v => `'${v.replace(/'/g, "''")}'`).join(',');
-            const cql = `cd_linha IN (${list})`;
-            log('WMS', 'apply CQL_FILTER', cql);
-            busesWmsFallback.setParams({ CQL_FILTER: cql, _refresh: Date.now() });
-        } else {
-            log('WMS', 'clear CQL_FILTER');
-            busesWmsFallback.setParams({ CQL_FILTER: null, _refresh: Date.now() });
-        }
-    }
-
+    // MOVE UP: refresh timing and UI helpers (must be defined before any usage)
     const REFRESH_MS = 10000;
     let countdownTimer = null;
 
@@ -332,6 +293,61 @@
         setTimeout(() => el.classList.add('d-none'), 1500);
     }
 
+    // Optional WMS fallback if WFS fails (non-clickable)
+    // const wmsUrl = 'https://geoserver.semob.df.gov.br/geoserver/semob/wms';
+    let stopsWmsFallback = null;
+    let busesWmsFallback = null;
+    let wmsClickAttached = false;
+
+    function wmsGetFeatureInfoUrl(layer, latlng) {
+        const point = map.latLngToContainerPoint(latlng, map.getZoom());
+        const size = map.getSize();
+        const b = map.getBounds();
+        const sw = map.options.crs.project(b.getSouthWest());
+        const ne = map.options.crs.project(b.getNorthEast());
+        const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
+        const params = { request: 'GetFeatureInfo', service: 'WMS', srs: 'EPSG:3857', styles: layer.wmsParams.styles || '', transparent: layer.wmsParams.transparent, version: '1.1.1', format: layer.wmsParams.format, bbox, height: size.y, width: size.x, layers: layer.wmsParams.layers, query_layers: layer.wmsParams.layers, info_format: 'text/html', x: Math.trunc(point.x), y: Math.trunc(point.y) };
+        const url = wmsUrl + L.Util.getParamString(params, wmsUrl, true);
+        log('WMS', 'GetFeatureInfo URL', url);
+        return url;
+    }
+
+    function attachWmsClick() {
+        if (wmsClickAttached || !ALLOW_WMS_MAP_CLICK) return;
+        log('WMS', 'attachWmsClick');
+        map.on('click', (e) => {
+            const layersToQuery = [busesWmsFallback, stopsWmsFallback].filter(Boolean);
+            log('WMS', 'map click', { latlng: e.latlng, layers: layersToQuery.length });
+            if (!layersToQuery.length) return;
+            const url = wmsGetFeatureInfoUrl(layersToQuery[0], e.latlng);
+            const html = `<div class="card shadow-sm border-0" style="min-width:200px;max-width:260px">
+                <div class="card-body p-2">
+                    <div class="small mb-1">Detalhes indisponíveis no popup.</div>
+                    <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="${url}">Abrir detalhes</a>
+                </div>
+            </div>`;
+            L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
+        });
+        wmsClickAttached = true;
+    }
+
+    // Add overlays from a local GeoJSON file (used in fallback)
+    async function tryLoadLocalStopsOverlay() {
+        try {
+            if (!stopHitLayer || (stopHitLayer.getLayers && stopHitLayer.getLayers().length)) return;
+            const r = await fetch('src/data/geojson_paradas.json');
+            if (!r.ok) return;
+            const gj = await r.json();
+            (gj.features || []).forEach(f => {
+                const c = f.geometry && f.geometry.coordinates;
+                if (!c || c.length < 2) return;
+                const latlng = L.latLng(c[1], c[0]);
+                stopHitLayer.addLayer(createStopHitMarker(latlng, f.properties || {}));
+            });
+            log('WMS', `local stops overlay loaded: ${gj.features?.length || 0}`);
+        } catch { /* ignore */ }
+    }
+
     function enableWmsFallback() {
         log('WMS', 'enableWmsFallback');
         // Always create both layers in fallback
@@ -355,7 +371,9 @@
             applyWmsBusFilter();
         }
         attachWmsClick();
-        setStatus('Fallback WMS ativo (cliques via GetFeatureInfo)');
+        // Try to add big clickable buttons using a local GeoJSON if available
+        tryLoadLocalStopsOverlay();
+        setStatus('Fallback WMS ativo (cliques só nos botões das paradas)');
         log('WMS', 'fallback layers active');
     }
 
@@ -376,8 +394,11 @@
             log('WFS', 'stops status', resp.status);
             if (!resp.ok) throw new Error(`Erro WFS Paradas: ${resp.status}`);
             const geojson = await resp.json();
+            // Clear layers before adding
+            stopHitLayer.clearLayers();
             busStopsLayer.clearLayers();
             stopsCluster.clearLayers();
+            // Add data
             busStopsLayer.addData(geojson);
             stopsCluster.addLayer(busStopsLayer);
             disableWmsFallback();
@@ -433,6 +454,14 @@
     map.on('moveend', () => { log('EVENT', 'moveend'); refreshBusPositions(); });
     setInterval(() => refreshBusPositions(), REFRESH_MS);
 
+    // Kick-off initial loads so layers appear even antes do primeiro intervalo
+    try {
+        loadBusStops();
+        refreshBusPositions();
+    } catch (e) {
+        log('INIT', 'initial load failed', e);
+    }
+
     // Helpers for popups
     function pickProp(props, candidates, fallback) {
         for (const k of candidates) {
@@ -467,6 +496,50 @@
                 Última atualização: ${atualizado}
             </div>
         `;
+    }
+
+    // Compact popup for stops (only description and code)
+    function buildStopMiniCard(props) {
+        const title = pickProp(props, ['descricao', 'ds_ponto', 'nm_parada', 'nome', 'ds_descricao'], 'Parada de ônibus');
+        const codigo = pickProp(props, ['cd_parada', 'codigo', 'id', 'id_parada'], '—');
+        return `
+            <div class="card shadow-sm border-0" style="min-width:200px;max-width:260px">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="small text-truncate" title="${title}">${title}</strong>
+                        <span class="badge badge-primary ml-2">Parada ${codigo}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function createStopHitMarker(latlng, props) {
+        const html = `
+            <div class="stop-hit">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="4" y="5" width="16" height="10" rx="2" ry="2" fill="#1f4fbf"></rect>
+                    <rect x="6" y="7" width="12" height="4" rx="1" ry="1" fill="#ffffff"></rect>
+                    <circle cx="9" cy="15" r="1.3" fill="#ffffff"></circle>
+                    <circle cx="15" cy="15" r="1.3" fill="#ffffff"></circle>
+                </svg>
+            </div>`;
+        const bigIcon = L.divIcon({
+            className: 'stop-hit-btn',
+            html,
+            iconSize: [48, 48],
+            iconAnchor: [24, 44], // anchor near the pin bottom
+        });
+        const marker = L.marker(latlng, { icon: bigIcon, interactive: true, bubblingMouseEvents: false });
+        marker.on('click', () => {
+            L.popup({ maxWidth: 280 })
+                .setLatLng(latlng)
+                .setContent(buildStopMiniCard(props || {}))
+                .openOn(map);
+        });
+        marker.on('mousedown touchstart', (e) => { map.dragging.disable(); if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent); });
+        marker.on('mouseup touchend', (e) => { map.dragging.enable(); if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent); });
+        return marker;
     }
 
     // Expose to global
