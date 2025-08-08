@@ -39,6 +39,7 @@
     const USE_PROXY = true;
     const ALLOW_WMS_MAP_CLICK = false; // only markers/overlays are clickable in fallback
     const DISABLE_FALLBACKS = true;    // disable any WMS fallback logic
+    const ENABLE_STOP_HIT_OVERLAY = false; // disable blue stop overlay buttons
     log('CONFIG', `USE_PROXY=${USE_PROXY}, ALLOW_WMS_MAP_CLICK=${ALLOW_WMS_MAP_CLICK}`);
 
     const WFS_BASE = USE_PROXY ? '/proxy/wfs' : 'https://geoserver.semob.df.gov.br/geoserver/semob/ows';
@@ -167,7 +168,7 @@
     }).addTo(map);
 
     // Extra layer: big clickable buttons over bus stops to ease tapping
-    const stopHitLayer = L.layerGroup().addTo(map);
+    const stopHitLayer = ENABLE_STOP_HIT_OVERLAY ? L.layerGroup().addTo(map) : L.layerGroup();
 
     // Replace GeoJSON layers to feed into clusters
     let busStopsLayer = L.geoJSON(null, {
@@ -182,11 +183,13 @@
             // Use compact card popup (descricao + codigo)
             layer.bindPopup(buildStopMiniCard(feature.properties || {}));
 
-            // Add a bigger clickable overlay button on top of the stop
-            const props = feature.properties || {};
-            const latlng = layer.getLatLng();
-            const hit = createStopHitMarker(latlng, props);
-            stopHitLayer.addLayer(hit);
+            // Add a bigger clickable overlay button on top of the stop (disabled by config)
+            if (ENABLE_STOP_HIT_OVERLAY) {
+                const props = feature.properties || {};
+                const latlng = layer.getLatLng();
+                const hit = createStopHitMarker(latlng, props);
+                stopHitLayer.addLayer(hit);
+            }
 
             const stopDrag = () => map.dragging.disable();
             const startDrag = () => map.dragging.enable();
@@ -231,6 +234,43 @@
         busStopsLayer.eachLayer(m => m.setIcon && m.setIcon(currentBusStopIcon));
         busPositionsLayer.eachLayer(m => m.setIcon && m.setIcon(currentBusIcon));
     });
+
+    // Visibility toggles for Stops and Buses
+    function updateStopsVisibility(show) {
+        log('UI', `updateStopsVisibility: ${show}`);
+        if (show) {
+            if (!map.hasLayer(stopsCluster)) map.addLayer(stopsCluster);
+            if (ENABLE_STOP_HIT_OVERLAY && !map.hasLayer(stopHitLayer)) map.addLayer(stopHitLayer);
+            if (stopsWmsFallback && !map.hasLayer(stopsWmsFallback)) map.addLayer(stopsWmsFallback);
+        } else {
+            if (map.hasLayer(stopsCluster)) map.removeLayer(stopsCluster);
+            if (map.hasLayer(stopHitLayer)) map.removeLayer(stopHitLayer);
+            if (stopsWmsFallback && map.hasLayer(stopsWmsFallback)) map.removeLayer(stopsWmsFallback);
+        }
+    }
+    function updateBusesVisibility(show) {
+        log('UI', `updateBusesVisibility: ${show}`);
+        if (show) {
+            if (!map.hasLayer(busesCluster)) map.addLayer(busesCluster);
+            if (busesWmsFallback && !map.hasLayer(busesWmsFallback)) map.addLayer(busesWmsFallback);
+        } else {
+            if (map.hasLayer(busesCluster)) map.removeLayer(busesCluster);
+            if (busesWmsFallback && map.hasLayer(busesWmsFallback)) map.removeLayer(busesWmsFallback);
+        }
+    }
+
+    function initLayerVisibilityToggles() {
+        const stopsToggle = document.getElementById('toggleStops');
+        const busesToggle = document.getElementById('toggleBuses');
+        if (stopsToggle) {
+            updateStopsVisibility(stopsToggle.checked);
+            stopsToggle.addEventListener('change', (e) => updateStopsVisibility(e.target.checked));
+        }
+        if (busesToggle) {
+            updateBusesVisibility(busesToggle.checked);
+            busesToggle.addEventListener('change', (e) => updateBusesVisibility(e.target.checked));
+        }
+    }
 
     // Selected lines filter (from multiselect)
     let selectedLines = new Set();
@@ -310,6 +350,13 @@
         document.addEventListener('DOMContentLoaded', initLineMultiSelect);
     } else {
         initLineMultiSelect();
+    }
+
+    // Initialize visibility toggles
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLayerVisibilityToggles);
+    } else {
+        initLayerVisibilityToggles();
     }
 
     // Helper to filter GeoJSON by selected line codes
@@ -420,6 +467,7 @@
     // Add overlays from a local GeoJSON file (used in fallback)
     async function tryLoadLocalStopsOverlay() {
         try {
+            if (!ENABLE_STOP_HIT_OVERLAY) return;
             if (!stopHitLayer || (stopHitLayer.getLayers && stopHitLayer.getLayers().length)) return;
             const r = await fetch('src/data/geojson_paradas.json');
             if (!r.ok) return;
@@ -458,7 +506,7 @@
         }
         attachWmsClick();
         // Try to add big clickable buttons using a local GeoJSON if available
-        tryLoadLocalStopsOverlay();
+        if (ENABLE_STOP_HIT_OVERLAY) tryLoadLocalStopsOverlay();
         setStatus('Fallback WMS ativo (cliques só nos botões das paradas)');
         log('WMS', 'fallback layers active');
     }
