@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DF Bus Tracker</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="src/css/styles.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <h1 class="text-center my-4">DF Bus Tracker</h1>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="busLineSearch">Search Bus Line:</label>
+                    <input type="text" id="busLineSearch" class="form-control" placeholder="Enter bus line...">
+                </div>
+                <button id="searchButton" class="btn btn-primary btn-block">Search</button>
+                <button id="refreshButton" class="btn btn-secondary btn-block">Refresh Bus Positions</button>
+                <div id="searchResults" class="mt-3"></div>
+            </div>
+            <div class="col-md-8">
+                <div id="map" style="height: 500px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <!-- Use Popper 1.x which is compatible with Bootstrap 4.5 -->
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- App scripts -->
+    <script src="src/js/main.js"></script>
+    <script src="src/js/map/map.js"></script>
+    <script src="src/js/services/wmsService.js"></script>
+    <script src="src/js/services/realtimeService.js"></script>
+    <script src="src/js/services/searchService.js"></script>
+    <script src="src/js/ui/search.js"></script>
+</body>
+</html>
