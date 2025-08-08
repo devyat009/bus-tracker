@@ -36,12 +36,51 @@
     }).addTo(map);
 
     // WFS/WMS endpoints
-    const USE_PROXY = false;
+    const USE_PROXY = true;
     const ALLOW_WMS_MAP_CLICK = false; // only markers/overlays are clickable in fallback
+    const DISABLE_FALLBACKS = true;    // disable any WMS fallback logic
     log('CONFIG', `USE_PROXY=${USE_PROXY}, ALLOW_WMS_MAP_CLICK=${ALLOW_WMS_MAP_CLICK}`);
 
     const WFS_BASE = USE_PROXY ? '/proxy/wfs' : 'https://geoserver.semob.df.gov.br/geoserver/semob/ows';
     const wmsUrl = USE_PROXY ? '/proxy/wms' : 'https://geoserver.semob.df.gov.br/geoserver/semob/wms';
+
+    // Add direct WFS endpoints (no proxy) provided by the user
+    const FIXED_WFS_URLS = {
+        buses: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3A%C3%9Altima%20posi%C3%A7%C3%A3o%20da%20frota&outputFormat=application%2Fjson',
+        schedules: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AHor%C3%A1rios%20das%20Linhas&outputFormat=application%2Fjson',
+        stops: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AParadas%20de%20onibus&outputFormat=application%2Fjson'
+    };
+
+    function fixedWfsUrl(baseUrl, bbox4326) {
+        try {
+            const u = new URL(baseUrl);
+            if (bbox4326) {
+                u.searchParams.set('bbox', `${bbox4326.getWest()},${bbox4326.getSouth()},${bbox4326.getEast()},${bbox4326.getNorth()},EPSG:4326`);
+            }
+            if (!u.searchParams.has('srsName')) u.searchParams.set('srsName', 'EPSG:4326');
+            return u.toString();
+        } catch (e) {
+            log('WFS', 'fixedWfsUrl error', e);
+            return baseUrl;
+        }
+    }
+
+    function getStopsWfsUrl() {
+        return USE_PROXY
+            ? `/proxy/fetch?url=${encodeURIComponent(FIXED_WFS_URLS.stops)}`
+            : fixedWfsUrl(FIXED_WFS_URLS.stops);
+    }
+    function getBusesWfsUrl(bounds4326) {
+        const remote = fixedWfsUrl(FIXED_WFS_URLS.buses, bounds4326);
+        return USE_PROXY
+            ? `/proxy/fetch?url=${encodeURIComponent(remote)}`
+            : remote;
+    }
+    function getSchedulesWfsUrl() {
+        return USE_PROXY
+            ? `/proxy/fetch?url=${encodeURIComponent(FIXED_WFS_URLS.schedules)}`
+            : FIXED_WFS_URLS.schedules;
+    }
 
     let wfsAvailable = true;
 
@@ -165,7 +204,7 @@
             icon: currentBusIcon,
             riseOnHover: true,
             bubblingMouseEvents: false,
-            title: 'Ônibus',
+            title: `Ônibus ${((feature && feature.properties && feature.properties.prefixo) || '')}`.trim(),
             keyboard: true
         }),
         onEachFeature: (feature, layer) => {
@@ -200,29 +239,66 @@
     // Selected lines filter (from multiselect)
     let selectedLines = new Set();
 
-    // Initialize Select2 and load options from CSV
+    // No-op when fallbacks are disabled
+    function applyWmsBusFilter() { /* fallbacks disabled */ }
+
+    // Initialize Select2 and load options from WFS schedules (fallback to CSV if needed)
     function initLineMultiSelect() {
         log('FILTER', 'initLineMultiSelect start');
         const $sel = window.jQuery && window.jQuery('#busLineSelect');
         if (!$sel || !$sel.length || !$sel.select2) { log('FILTER', 'Select2 not available'); return; }
         $sel.select2({ placeholder: 'Digite para filtrar linhas', allowClear: true, width: 'resolve' });
 
-        fetch('src/data/horarios-das-linhas.csv')
-            .then(r => { log('FILTER', 'fetch CSV status', r.status); return r.text(); })
-            .then(txt => {
-                const rows = txt.split(/\r?\n/).filter(Boolean);
-                const dataRows = rows.slice(1);
-                const codes = new Set();
-                dataRows.forEach(row => {
-                    const cols = row.includes(';') ? row.split(';') : row.split(',');
-                    const cd = (cols[3] || '').trim();
-                    if (cd) codes.add(cd);
+        function extractCodesFromWfs(data) {
+            try {
+                const feats = (data && data.features) || [];
+                const set = new Set();
+                feats.forEach(f => {
+                    const p = f && f.properties || {};
+                    const code = (p.cd_linha || p.linha || p.servico || '').toString().trim();
+                    if (code) set.add(code);
                 });
-                log('FILTER', `loaded codes: ${codes.size}`);
+                return set;
+            } catch (e) {
+                log('FILTER', 'extractCodesFromWfs error', e);
+                return new Set();
+            }
+        }
+        function loadCsvCodesFallback() {
+            return fetch('src/data/horarios-das-linhas.csv')
+                .then(r => { log('FILTER', 'fetch CSV status', r.status); return r.text(); })
+                .then(txt => {
+                    const rows = txt.split(/\r?\n/).filter(Boolean);
+                    const dataRows = rows.slice(1);
+                    const set = new Set();
+                    dataRows.forEach(row => {
+                        const cols = row.includes(';') ? row.split(';') : row.split(',');
+                        const cd = (cols[3] || '').trim();
+                        if (cd) set.add(cd);
+                    });
+                    return set;
+                });
+        }
+
+        fetch(getSchedulesWfsUrl(), { headers: { 'Accept': 'application/json' }, mode: 'cors' })
+            .then(resp => { log('FILTER', 'WFS schedules status', resp.status); if (!resp.ok) throw new Error(resp.statusText); return resp.json(); })
+            .then(data => {
+                let codes = extractCodesFromWfs(data);
+                if (!codes.size) throw new Error('No codes from WFS');
+                log('FILTER', `loaded codes (WFS): ${codes.size}`);
                 const options = Array.from(codes).sort().map(cd => new Option(cd, cd, false, false));
                 $sel.append(options).trigger('change');
             })
-            .catch(err => { log('FILTER', 'fetch CSV failed', err); });
+            .catch(err => {
+                log('FILTER', 'WFS schedules failed, fallback CSV', err);
+                loadCsvCodesFallback()
+                    .then(codes => {
+                        log('FILTER', `loaded codes (CSV): ${codes.size}`);
+                        const options = Array.from(codes).sort().map(cd => new Option(cd, cd, false, false));
+                        $sel.append(options).trigger('change');
+                    })
+                    .catch(e2 => log('FILTER', 'CSV fallback failed', e2));
+            });
 
         $sel.on('change', function () {
             const values = $sel.val() || [];
@@ -387,8 +463,7 @@
     async function loadBusStops() {
         log('WFS', 'loadBusStops start');
         try {
-            const typeName = 'semob:Paradas de onibus';
-            const url = buildWfsUrl(typeName);
+            const url = getStopsWfsUrl();
             log('WFS', 'fetch stops', url);
             const resp = await fetch(url, { headers: { 'Accept': 'application/json' }, mode: 'cors' });
             log('WFS', 'stops status', resp.status);
@@ -401,32 +476,31 @@
             // Add data
             busStopsLayer.addData(geojson);
             stopsCluster.addLayer(busStopsLayer);
-            disableWmsFallback();
+            // disableWmsFallback();
             setStatus(`Paradas: ${geojson.features?.length || 0}`);
             log('WFS', 'loadBusStops ok', geojson.features?.length || 0);
         } catch (e) {
             console.error('Falha ao carregar paradas:', e);
-            wfsAvailable = false;
-            enableWmsFallback();
-            log('WFS', 'loadBusStops failed, fallback enabled');
+            setStatus('Falha ao carregar paradas', false);
+            showUpdatedToast(false);
+            log('WFS', 'loadBusStops failed', e);
         }
     }
 
     async function refreshBusPositions() {
         startCountdown();
-        log('WFS', 'refreshBusPositions start', { wfsAvailable });
+        log('WFS', 'refreshBusPositions start');
         try {
-            if (!wfsAvailable) {
-                applyWmsBusFilter();
-                busesWmsFallback && busesWmsFallback.setParams({ _refresh: Date.now() });
-                setStatus('Ônibus via WMS (WFS indisponível)');
-                showUpdatedToast(true);
-                log('WMS', 'refreshed WMS buses');
-                return;
-            }
+            // if (!wfsAvailable) {
+            //     applyWmsBusFilter();
+            //     busesWmsFallback && busesWmsFallback.setParams({ _refresh: Date.now() });
+            //     setStatus('Ônibus via WMS (WFS indisponível)');
+            //     showUpdatedToast(true);
+            //     log('WMS', 'refreshed WMS buses');
+            //     return;
+            // }
             const bounds = map.getBounds();
-            const typeName = 'semob:Última posição da frota';
-            const url = buildWfsUrl(typeName, bounds) + `&_=${Date.now()}`;
+            const url = getBusesWfsUrl(bounds) + `&_=${Date.now()}`;
             log('WFS', 'fetch buses', url);
             const resp = await fetch(url, { headers: { 'Accept': 'application/json' }, mode: 'cors' });
             log('WFS', 'buses status', resp.status);
@@ -437,16 +511,15 @@
             busesCluster.clearLayers();
             busPositionsLayer.addData(geojson);
             busesCluster.addLayer(busPositionsLayer);
-            disableWmsFallback();
+            // disableWmsFallback();
             setStatus(`Ônibus: ${geojson.features?.length || 0}`);
             showUpdatedToast(true);
             log('WFS', 'refreshBusPositions ok', geojson.features?.length || 0);
         } catch (e) {
             console.error('Falha ao atualizar posições da frota:', e);
-            wfsAvailable = false;
-            enableWmsFallback();
+            setStatus('Falha ao atualizar posições da frota', false);
             showUpdatedToast(false);
-            log('WFS', 'refreshBusPositions failed, fallback enabled', e);
+            log('WFS', 'refreshBusPositions failed', e);
         }
     }
 
@@ -484,16 +557,18 @@
     }
 
     function buildBusPopup(props) {
+        const prefixo = pickProp(props, ['prefixo'], '—');
+        const velocidade = pickProp(props, ['velocidade'], '—');
+        const datalocal = pickProp(props, ['datalocal'], '—');
+        const sentido = pickProp(props, ['sentido'], '—');
         const linha = pickProp(props, ['cd_linha', 'linha', 'servico'], '—');
-        const numero = pickProp(props, ['prefixo', 'numero', 'veiculo', 'onibus'], '—');
-        const empresa = pickProp(props, ['empresa', 'operadora', 'nm_operadora'], '—');
-        const atualizado = pickProp(props, ['ultima_atualizacao', 'datahora', 'timestamp', 'last_update'], '—');
         return `
             <div>
-                <strong>Ônibus ${numero}</strong><br/>
+                <strong>Ônibus ${prefixo}</strong><br/>
                 Linha: ${linha}<br/>
-                Empresa: ${empresa}<br/>
-                Última atualização: ${atualizado}
+                Velocidade: ${velocidade} km/h<br/>
+                Sentido: ${sentido}<br/>
+                Data local: ${datalocal}
             </div>
         `;
     }
