@@ -65,21 +65,17 @@
         }
     }
 
-    function getStopsWfsUrl() {
-        return USE_PROXY
-            ? `/proxy/fetch?url=${encodeURIComponent(FIXED_WFS_URLS.stops)}`
-            : fixedWfsUrl(FIXED_WFS_URLS.stops);
+    function getStopsWfsUrl(bounds4326) {
+        const remote = fixedWfsUrl(FIXED_WFS_URLS.stops, bounds4326);
+        return USE_PROXY ? `/proxy/fetch?url=${encodeURIComponent(remote)}` : remote;
     }
     function getBusesWfsUrl(bounds4326) {
         const remote = fixedWfsUrl(FIXED_WFS_URLS.buses, bounds4326);
-        return USE_PROXY
-            ? `/proxy/fetch?url=${encodeURIComponent(remote)}`
-            : remote;
+        return USE_PROXY ? `/proxy/fetch?url=${encodeURIComponent(remote)}` : remote;
     }
     function getSchedulesWfsUrl() {
-        return USE_PROXY
-            ? `/proxy/fetch?url=${encodeURIComponent(FIXED_WFS_URLS.schedules)}`
-            : FIXED_WFS_URLS.schedules;
+        const remote = FIXED_WFS_URLS.schedules;
+        return USE_PROXY ? `/proxy/fetch?url=${encodeURIComponent(remote)}` : remote;
     }
 
     let wfsAvailable = true;
@@ -328,6 +324,20 @@
         return { type: 'FeatureCollection', features };
     }
 
+    // Keep only active stops (heuristic based on common property names)
+    function isActiveStop(props = {}) {
+        const v = (props.ativa ?? props.ativo ?? props.st_ativa ?? props.status ?? props.situacao ?? '').toString().trim().toUpperCase();
+        if (v === '' || v === 'NULL') return true; // unknown -> keep
+        if (['1','S','SIM','ATIVA','ATIVO','TRUE','T'].includes(v)) return true;
+        if (['0','N','NAO','NÃO','INATIVA','INATIVO','FALSE','F'].includes(v)) return false;
+        return true;
+    }
+    function filterActiveStops(geojson) {
+        const feats = (geojson?.features || []).filter(f => isActiveStop(f.properties || {}));
+        log('WFS', `filterActiveStops ${feats.length}/${geojson?.features?.length || 0}`);
+        return { type: 'FeatureCollection', features: feats };
+    }
+
     // Refresh status indicator
     function setStatus(text, ok = true) {
         const refreshStatusEl = document.getElementById('refreshStatus');
@@ -463,12 +473,14 @@
     async function loadBusStops() {
         log('WFS', 'loadBusStops start');
         try {
-            const url = getStopsWfsUrl();
+            const bounds = map.getBounds();
+            const url = getStopsWfsUrl(bounds) + `&_=${Date.now()}`;
             log('WFS', 'fetch stops', url);
-            const resp = await fetch(url, { headers: { 'Accept': 'application/json' }, mode: 'cors' });
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
             log('WFS', 'stops status', resp.status);
             if (!resp.ok) throw new Error(`Erro WFS Paradas: ${resp.status}`);
-            const geojson = await resp.json();
+            let geojson = await resp.json();
+            geojson = filterActiveStops(geojson);
             // Clear layers before adding
             stopHitLayer.clearLayers();
             busStopsLayer.clearLayers();
@@ -476,7 +488,6 @@
             // Add data
             busStopsLayer.addData(geojson);
             stopsCluster.addLayer(busStopsLayer);
-            // disableWmsFallback();
             setStatus(`Paradas: ${geojson.features?.length || 0}`);
             log('WFS', 'loadBusStops ok', geojson.features?.length || 0);
         } catch (e) {
@@ -502,7 +513,7 @@
             const bounds = map.getBounds();
             const url = getBusesWfsUrl(bounds) + `&_=${Date.now()}`;
             log('WFS', 'fetch buses', url);
-            const resp = await fetch(url, { headers: { 'Accept': 'application/json' }, mode: 'cors' });
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
             log('WFS', 'buses status', resp.status);
             if (!resp.ok) throw new Error(`Erro WFS Frota: ${resp.status}`);
             let geojson = await resp.json();
@@ -524,7 +535,7 @@
     }
 
     // Auto refresh when map stops moving and every REFRESH_MS
-    map.on('moveend', () => { log('EVENT', 'moveend'); refreshBusPositions(); });
+    map.on('moveend', () => { log('EVENT', 'moveend'); refreshBusPositions(); loadBusStops(); });
     setInterval(() => refreshBusPositions(), REFRESH_MS);
 
     // Kick-off initial loads so layers appear even antes do primeiro intervalo
