@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 
@@ -6,13 +6,49 @@ interface OpenStreetMapProps {
   latitude?: number;
   longitude?: number;
   zoom?: number;
+  showUserMarker?: boolean; // controls visibility of the pulsating user marker
 }
 
+const INITIAL_LAT = -15.7801;
+const INITIAL_LNG = -47.9292;
+const INITIAL_ZOOM = 15;
+
 const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
-  latitude = -15.7801,
-  longitude = -47.9292,
-  zoom = 15
+  latitude,
+  longitude,
+  zoom = INITIAL_ZOOM,
+  showUserMarker = true,
 }) => {
+  const webviewRef = useRef<WebView>(null);
+
+  // When coordinates change, tell the map to recenter and move the user marker
+  useEffect(() => {
+    if (webviewRef.current && typeof latitude === 'number' && typeof longitude === 'number') {
+      const js = `
+        if (window.setUserPosition) {
+          window.setUserPosition(${latitude}, ${longitude}, ${zoom});
+        }
+        true; // required to avoid silent failures on Android
+      `;
+      // @ts-ignore - injectJavaScript exists at runtime
+      webviewRef.current.injectJavaScript(js);
+    }
+  }, [latitude, longitude, zoom]);
+
+  // Toggle user marker visibility when requested from RN
+  useEffect(() => {
+    if (webviewRef.current) {
+      const js = `
+        if (window.setUserMarkerVisible) {
+          window.setUserMarkerVisible(${showUserMarker ? 'true' : 'false'});
+        }
+        true;
+      `;
+      // @ts-ignore
+      webviewRef.current.injectJavaScript(js);
+    }
+  }, [showUserMarker]);
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -39,8 +75,8 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         }
         .pulse-inner {
           position: absolute;
-          top: 4px;
-          left: 4px;
+          top: 6px; /* center 12px inside 24px */
+          left: 6px;
           width: 12px;
           height: 12px;
           background: #2196f3;
@@ -59,7 +95,8 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
       <div id="map"></div>
       <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
       <script>
-        var map = L.map('map').setView([${latitude}, ${longitude}], ${zoom});
+        // Keep map persistent regardless of RN prop changes
+        var map = L.map('map').setView([${INITIAL_LAT}, ${INITIAL_LNG}], ${INITIAL_ZOOM});
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
         }).addTo(map);
@@ -71,7 +108,36 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           iconSize: [24, 24],
           iconAnchor: [12, 12],
         });
-        L.marker([${latitude}, ${longitude}], {icon: userIcon}).addTo(map);
+
+        // Create a user marker reference (hidden by default)
+        var userMarker = L.marker([${INITIAL_LAT}, ${INITIAL_LNG}], {icon: userIcon});
+        var userMarkerVisible = false; // default hidden to avoid flashing at initial position
+
+        // Expose a function to recenter and move the marker from RN
+        window.setUserPosition = function(lat, lng, z) {
+          try {
+            userMarker.setLatLng([lat, lng]);
+            // Keep current zoom if not provided
+            var targetZoom = (typeof z === 'number' && !isNaN(z)) ? z : map.getZoom();
+            map.setView([lat, lng], targetZoom, { animate: true });
+            // Ensure marker is shown only when visibility is enabled
+            if (userMarkerVisible && !map.hasLayer(userMarker)) {
+              userMarker.addTo(map);
+            }
+          } catch (e) { /* noop */ }
+        }
+
+        // Show/hide the user marker
+        window.setUserMarkerVisible = function(visible) {
+          try {
+            userMarkerVisible = !!visible;
+            if (userMarkerVisible) {
+              if (!map.hasLayer(userMarker)) { userMarker.addTo(map); }
+            } else {
+              if (map.hasLayer(userMarker)) { map.removeLayer(userMarker); }
+            }
+          } catch (e) { /* noop */ }
+        }
       </script>
     </body>
     </html>
@@ -80,6 +146,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   return (
     <View style={styles.container}>
       <WebView
+      ref={webviewRef}
         originWhitelist={['*']}
         source={{ html }}
         style={styles.webview}

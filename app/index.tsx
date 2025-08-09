@@ -7,12 +7,14 @@ import OpenStreetMap from "../components/OpenStreetMap";
 export default function Index() {
   console.log('Index component rendered with OpenStreetMap');
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locating, setLocating] = useState(true);
 
   // Locate user position
   const getLocation = async () => {
+    setLocating(true);
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
-      setLocation({ latitude: -15.7801, longitude: -47.9292 });
+      setLocating(false);
       return;
     }
     let loc = await Location.getCurrentPositionAsync({});
@@ -20,14 +22,16 @@ export default function Index() {
       latitude: loc.coords.latitude,
       longitude: loc.coords.longitude,
     });
+    setLocating(false);
   };
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
     (async () => {
+      setLocating(true);
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setLocation({ latitude: -15.7801, longitude: -47.9292 });
+        setLocating(false);
         return;
       }
       subscription = await Location.watchPositionAsync(
@@ -37,6 +41,8 @@ export default function Index() {
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
           });
+          // hide only while first fix is pending; subsequent watch updates should keep marker visible
+          setLocating(false);
         }
       );
     })();
@@ -55,6 +61,7 @@ export default function Index() {
           latitude={location?.latitude}
           longitude={location?.longitude}
           zoom={16}
+          showUserMarker={!!location && !locating}
         />
         <TouchableOpacity style={styles.locateButton} onPress={getLocation}>
           <Ionicons name="locate" size={28} color="#007AFF" />
