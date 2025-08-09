@@ -492,8 +492,8 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
               maxClusterRadius: function (zoom) {
                 if (zoom >= 18) return 1;
                 if (zoom >= 17) return 20;
-                if (zoom >= 16) return 40;
-                return 60;
+                if (zoom >= 16) return 10;
+                return 1;
               }
             });
             created = true;
