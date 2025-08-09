@@ -292,6 +292,7 @@
     function initLayerVisibilityToggles() {
         const stopsToggle = document.getElementById('toggleStops');
         const busesToggle = document.getElementById('toggleBuses');
+        const activeBusesToggle = document.getElementById('toggleActiveBuses');
         if (stopsToggle) {
             updateStopsVisibility(stopsToggle.checked);
             stopsToggle.addEventListener('change', (e) => updateStopsVisibility(e.target.checked));
@@ -300,10 +301,21 @@
             updateBusesVisibility(busesToggle.checked);
             busesToggle.addEventListener('change', (e) => updateBusesVisibility(e.target.checked));
         }
+        if (activeBusesToggle) {
+            showOnlyActiveBuses = !!activeBusesToggle.checked;
+            activeBusesToggle.addEventListener('change', (e) => {
+                showOnlyActiveBuses = !!e.target.checked;
+                log('FILTER', `toggle active buses -> ${showOnlyActiveBuses}`);
+                refreshBusPositions();
+                applyWmsBusFilter();
+            });
+        }
     }
 
     // Selected lines filter (from multiselect)
     let selectedLines = new Set();
+    // Active buses filter: only include features that have a Linha value
+    let showOnlyActiveBuses = false;
 
     // No-op when fallbacks are disabled
     function applyWmsBusFilter() { /* fallbacks disabled */ }
@@ -398,6 +410,18 @@
             return selectedLines.has(code);
         });
         log('FILTER', `filtered ${features.length}/${geojson.features?.length || 0}`);
+        return { type: 'FeatureCollection', features };
+    }
+
+    // When enabled, keep only buses that have a non-empty Linha-related property
+    function filterOnlyActiveBuses(geojson) {
+        if (!showOnlyActiveBuses) return geojson;
+        const features = (geojson.features || []).filter(f => {
+            const p = f.properties || {};
+            const linhaVal = (p.cd_linha ?? p.linha ?? p.servico ?? '').toString().trim();
+            return linhaVal !== '' && linhaVal.toUpperCase() !== 'NULL' && linhaVal.toUpperCase() !== 'N/A';
+        });
+        log('FILTER', `active buses ${features.length}/${geojson.features?.length || 0}`);
         return { type: 'FeatureCollection', features };
     }
 
@@ -596,6 +620,7 @@
             if (!resp.ok) throw new Error(`Erro WFS Frota: ${resp.status}`);
             let geojson = await resp.json();
             geojson = filterBusesBySelectedLines(geojson);
+            geojson = filterOnlyActiveBuses(geojson);
             busPositionsLayer.clearLayers();
             busesCluster.clearLayers();
             busPositionsLayer.addData(geojson);
