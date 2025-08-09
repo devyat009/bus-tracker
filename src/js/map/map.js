@@ -85,20 +85,7 @@
         return USE_PROXY ? `/proxy/fetch?url=${encodeURIComponent(remote)}` : remote;
     }
 
-    let wfsAvailable = true;
-
-    // Build a WFS URL with optional bbox in EPSG:4326
-    function buildWfsUrl(typeName, bbox4326) {
-        const params = new URLSearchParams({
-            service: 'WFS', version: '1.0.0', request: 'GetFeature', typeName, outputFormat: 'application/json', srsName: 'EPSG:4326'
-        });
-        if (bbox4326) {
-            params.set('bbox', `${bbox4326.getWest()},${bbox4326.getSouth()},${bbox4326.getEast()},${bbox4326.getNorth()},EPSG:4326`);
-        }
-        const url = `${WFS_BASE}?${params.toString()}`;
-        log('WFS', 'buildWfsUrl', { typeName, bbox: bbox4326 ? bbox4326.toBBoxString?.() : null, url });
-        return url;
-    }
+    // (removed unused wfsAvailable and buildWfsUrl helper)
 
     // Data URIs for simple SVG icons
     function makeBusStopIcon(size) {
@@ -689,18 +676,6 @@
         }
     }
 
-    // Auto refresh when map stops moving and every REFRESH_MS
-    map.on('moveend', () => { log('EVENT', 'moveend'); refreshBusPositions(); loadBusStops(); });
-    setInterval(() => refreshBusPositions(), REFRESH_MS);
-
-    // Kick-off initial loads so layers appear even antes do primeiro intervalo
-    try {
-        loadBusStops();
-        refreshBusPositions();
-    } catch (e) {
-        log('INIT', 'initial load failed', e);
-    }
-
     // Helpers for popups
     function pickProp(props, candidates, fallback) {
         for (const k of candidates) {
@@ -709,18 +684,7 @@
         return fallback;
     }
 
-    function buildStopPopup(props) {
-        const title = pickProp(props, ['descricao', 'ds_ponto', 'nm_parada', 'nome', 'ds_descricao'], 'Parada de ônibus');
-        const codigo = pickProp(props, ['cd_parada', 'codigo', 'id', 'id_parada'], '—');
-        const sentido = pickProp(props, ['sentido', 'ds_sentido'], '—');
-        return `
-            <div>
-                <strong>${title}</strong><br/>
-                Código: ${codigo}<br/>
-                Sentido: ${sentido}
-            </div>
-        `;
-    }
+    // Removed unused buildStopPopup (using buildStopMiniCard instead)
 
     function buildBusPopup(props, tarifaOverride) {
         const prefixo = pickProp(props, ['prefixo'], '—');

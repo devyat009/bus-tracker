@@ -23,7 +23,6 @@
                     <label for="busLineSelect">Filtrar Linhas (multi):</label>
                     <select id="busLineSelect" class="form-control" multiple style="width:100%"></select>
                 </div>
-                <button id="searchButton" class="btn btn-primary btn-block">Pesquisar</button>
                 <button id="refreshButton" class="btn btn-secondary btn-block">Atualizar Posição dos ônibus</button>
                 <small id="refreshStatus" class="text-muted d-block mt-2"></small>
                 <div class="progress mt-2" id="refreshProgress" style="height:6px;">
@@ -44,8 +43,6 @@
                     <input type="checkbox" class="custom-control-input" id="toggleActiveBuses">
                     <label class="custom-control-label" for="toggleActiveBuses">Mostrar apenas ônibus ativos</label>
                 </div>
-
-                <div id="searchResults" class="mt-3"></div>
             </div>
             <div class="col-md-8">
                 <div id="map" style="height: 700px;"></div>
@@ -68,9 +65,6 @@
     <!-- App scripts -->
     <script src="src/js/main.js"></script>
     <script src="src/js/map/map.js"></script>
-    <script src="src/js/services/wmsService.js"></script>
-    <script src="src/js/services/realtimeService.js"></script>
-    <script src="src/js/services/searchService.js"></script>
-    <script src="src/js/ui/search.js"></script>
+    <!-- Removed unused services and search UI scripts -->
 </body>
 </html>
