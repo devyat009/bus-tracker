@@ -200,6 +200,7 @@
 
     // Cache for lines dataset to avoid repeated WFS fetches
     let linesDataset = null; // FeatureCollection or null
+    let linesDatasetLoading = false; // Track if dataset is being loaded
     // Control whether we auto-fit to the route after drawing (disabled per user request)
     let autoFitRoute = false;
 
@@ -792,20 +793,34 @@
         return candidates.some(c => c.raw === target || (c.digits && c.digits === targetDigits));
     }
 
-    async function ensureLinesDataset() {
-        if (linesDataset) return linesDataset;
+    async function ensureLinesDataset(forceRefresh = false) {
+        if (linesDataset && !forceRefresh) return linesDataset;
+        if (linesDatasetLoading) {
+            // If already loading, wait for the current request to finish
+            return new Promise(resolve => {
+                const check = () => {
+                    if (!linesDatasetLoading) resolve(linesDataset);
+                    else setTimeout(check, 100);
+                };
+                check();
+            });
+        }
+        
         try {
-            setStatus('Carregando trajetos das linhas...');
+            linesDatasetLoading = true;
+            if (forceRefresh) setStatus('Recarregando trajetos das linhas...');
             const url = getLinesWfsUrl() + `&_=${Date.now()}`;
-            log('ROUTE', 'fetch lines', url);
+            log('ROUTE', forceRefresh ? 'force refresh lines' : 'fetch lines', url);
             const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
             log('ROUTE', 'lines status', resp.status);
             if (!resp.ok) throw new Error(`Erro WFS Linhas: ${resp.status}`);
             linesDataset = await resp.json();
-            setStatus('Trajetos carregados');
+            if (forceRefresh) setStatus('Trajetos recarregados');
         } catch (e) {
             console.error('Falha ao carregar linhas:', e);
-            setStatus('Falha ao carregar trajetos', false);
+            if (forceRefresh) setStatus('Falha ao recarregar trajetos', false);
+        } finally {
+            linesDatasetLoading = false;
         }
         return linesDataset;
     }
@@ -818,10 +833,16 @@
             currentRouteLayer.clearLayers();
             // Filter matching features
             const feats = ds.features.filter(f => matchLineCode(f.properties || {}, codeRaw));
+            // If no features found, force refresh and try again
             if (!feats.length) {
-                log('ROUTE', `no features for code ${codeRaw}`);
-                showUpdatedToast(false);
-                return;
+                log('ROUTE', `no features for code ${codeRaw}, forcing refresh`);
+                ds = await ensureLinesDataset(true); // Force refresh
+                feats = ds?.features?.filter(f => matchLineCode(f.properties || {}, codeRaw)) || [];
+                if (!feats.length) {
+                    log('ROUTE', `still no features after refresh for code ${codeRaw}`);
+                    showUpdatedToast(false);
+                    return;
+                }
             }
             const gj = { type: 'FeatureCollection', features: feats };
             currentRouteLayer.addData(gj);
@@ -889,6 +910,20 @@
         marker.on('mousedown touchstart', (e) => { map.dragging.disable(); if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent); });
         marker.on('mouseup touchend', (e) => { map.dragging.enable(); if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent); });
         return marker;
+    }
+
+    // Auto refresh when map stops moving and every REFRESH_MS
+    map.on('moveend', () => { log('EVENT', 'moveend'); refreshBusPositions(); loadBusStops(); });
+    setInterval(() => refreshBusPositions(), REFRESH_MS);
+
+    // Kick-off initial loads so layers appear even antes do primeiro intervalo
+    try {
+        loadBusStops();
+        refreshBusPositions();
+        // Quietly preload lines dataset in background
+        ensureLinesDataset().catch(e => log('PRELOAD', 'background lines preload failed', e));
+    } catch (e) {
+        log('INIT', 'initial load failed', e);
     }
 
     // Expose to global
