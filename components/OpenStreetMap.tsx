@@ -1,6 +1,6 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import React from "react";
+import { StyleSheet, View } from "react-native";
+import { WebView } from "react-native-webview";
 
 interface OpenStreetMapProps {
   latitude?: number;
@@ -11,38 +11,68 @@ interface OpenStreetMapProps {
 const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   latitude = -15.7801,
   longitude = -47.9292,
-  zoom = 12
+  zoom = 15
 }) => {
-  const htmlContent = `
+  const html = `
     <!DOCTYPE html>
     <html>
     <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>OpenStreetMap</title>
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <style>
-            body { margin: 0; padding: 0; }
-            #map { height: 100vh; width: 100vw; }
-        </style>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+      <style>
+        html, body, #map { height: 100%; margin: 0; padding: 0; }
+        .pulse-marker {
+          position: relative;
+          width: 24px;
+          height: 24px;
+        }
+        .pulse-outer {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 24px;
+          height: 24px;
+          background: #2196f3;
+          opacity: 0.3;
+          border-radius: 50%;
+          animation: pulse 1.5s infinite;
+        }
+        .pulse-inner {
+          position: absolute;
+          top: 4px;
+          left: 4px;
+          width: 12px;
+          height: 12px;
+          background: #2196f3;
+          border-radius: 50%;
+          border: 2px solid #fff;
+          box-shadow: 0 0 4px #2196f3;
+        }
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(1.7); opacity: 0.1; }
+          100% { transform: scale(1); opacity: 0.3; }
+        }
+      </style>
     </head>
     <body>
-        <div id="map"></div>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script>
-            // StartsMap
-            var map = L.map('map').setView([${latitude}, ${longitude}], ${zoom});
-            
-            // OpenStreetMap
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-          
-            
-            // Scale controller
-            L.control.scale().addTo(map);
-        </script>
+      <div id="map"></div>
+      <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+      <script>
+        var map = L.map('map').setView([${latitude}, ${longitude}], ${zoom});
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+        }).addTo(map);
+
+        // Custom pulsating marker
+        var userIcon = L.divIcon({
+          className: '',
+          html: '<div class="pulse-marker"><div class="pulse-outer"></div><div class="pulse-inner"></div></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        });
+        L.marker([${latitude}, ${longitude}], {icon: userIcon}).addTo(map);
+      </script>
     </body>
     </html>
   `;
@@ -50,12 +80,12 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   return (
     <View style={styles.container}>
       <WebView
-        source={{ html: htmlContent }}
+        originWhitelist={['*']}
+        source={{ html }}
         style={styles.webview}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        startInLoadingState={true}
-        scalesPageToFit={true}
+        javaScriptEnabled
+        domStorageEnabled
+        scrollEnabled={false}
       />
     </View>
   );

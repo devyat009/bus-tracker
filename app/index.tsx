@@ -1,25 +1,48 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
-import { SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import OpenStreetMap from "../components/OpenStreetMap";
 
 export default function Index() {
   console.log('Index component rendered with OpenStreetMap');
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // Locate user position
+  const getLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      setLocation({ latitude: -15.7801, longitude: -47.9292 });
+      return;
+    }
+    let loc = await Location.getCurrentPositionAsync({});
+    setLocation({
+      latitude: loc.coords.latitude,
+      longitude: loc.coords.longitude,
+    });
+  };
+
   useEffect(() => {
+    let subscription: Location.LocationSubscription | null = null;
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        // Fallback
         setLocation({ latitude: -15.7801, longitude: -47.9292 });
         return;
       }
-      let loc = await Location.getCurrentPositionAsync({});
-      setLocation({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
+      subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 5 },
+        (loc) => {
+          setLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        }
+      );
     })();
+    return () => {
+      if (subscription) subscription.remove();
+    };
   }, []);
   
   return (
@@ -31,8 +54,11 @@ export default function Index() {
         <OpenStreetMap 
           latitude={location?.latitude}
           longitude={location?.longitude}
-          zoom={12}
+          zoom={16}
         />
+        <TouchableOpacity style={styles.locateButton} onPress={getLocation}>
+          <Ionicons name="locate" size={28} color="#007AFF" />
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -58,5 +84,21 @@ const styles = StyleSheet.create({
   mapContainer: {
     flex: 1,
     padding: 10,
+  },
+  locateButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
 });
