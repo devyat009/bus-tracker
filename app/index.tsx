@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from "expo-location";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import OpenStreetMap from "../components/OpenStreetMap";
+import OpenStreetMap, { OpenStreetMapHandle } from "../components/OpenStreetMap";
 
 export default function Index() {
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(true);
+  const mapRef = useRef<OpenStreetMapHandle>(null);
 
   // Locate user position
   const getLocation = async () => {
@@ -21,6 +22,8 @@ export default function Index() {
       latitude: loc.coords.latitude,
       longitude: loc.coords.longitude,
     });
+  // Force recenter even if props haven't changed
+  mapRef.current?.recenter(loc.coords.latitude, loc.coords.longitude, 16);
     setLocating(false);
   };
 
@@ -38,6 +41,8 @@ export default function Index() {
         const first = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         setLocation({ latitude: first.coords.latitude, longitude: first.coords.longitude });
         setLocating(false);
+  // Recenter map to initial position
+  mapRef.current?.recenter(first.coords.latitude, first.coords.longitude, 16);
   } catch {
         setLocating(false);
       }
@@ -64,6 +69,7 @@ export default function Index() {
       </View>
       <View style={styles.mapContainer}>
         <OpenStreetMap 
+          ref={mapRef}
           latitude={location?.latitude}
           longitude={location?.longitude}
           zoom={16}

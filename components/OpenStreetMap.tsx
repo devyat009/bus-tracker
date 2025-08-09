@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 
@@ -9,17 +9,35 @@ interface OpenStreetMapProps {
   showUserMarker?: boolean; // controls visibility of the pulsating user marker
 }
 
+export type OpenStreetMapHandle = {
+  recenter: (lat: number, lng: number, z?: number) => void;
+};
+
 const INITIAL_LAT = -15.7801;
 const INITIAL_LNG = -47.9292;
 const INITIAL_ZOOM = 15;
 
-const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
+const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
   latitude,
   longitude,
   zoom = INITIAL_ZOOM,
   showUserMarker = true,
-}) => {
+}, ref) => {
   const webviewRef = useRef<WebView>(null);
+
+  // Expose an imperative recenter method
+  useImperativeHandle(ref, () => ({
+    recenter: (lat: number, lng: number, z?: number) => {
+      if (!webviewRef.current) return;
+      const js = `
+  if (window.recenterOnly) { window.recenterOnly(${Number(lat)}, ${Number(lng)}, ${typeof z === 'number' ? Number(z) : 'undefined'}); }
+        if (window.setUserMarkerVisible) { window.setUserMarkerVisible(true); }
+        true;
+      `;
+      // @ts-ignore
+      webviewRef.current.injectJavaScript(js);
+    }
+  }), []);
 
   // When coordinates change, tell the map to recenter and move the user marker
   useEffect(() => {
@@ -35,19 +53,22 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     }
   }, [latitude, longitude, zoom]);
 
-  // Toggle user marker visibility when requested from RN
+  // Toggle user marker visibility and optionally recenter when becoming visible
   useEffect(() => {
     if (webviewRef.current) {
       const js = `
         if (window.setUserMarkerVisible) {
           window.setUserMarkerVisible(${showUserMarker ? 'true' : 'false'});
         }
+        ${showUserMarker && typeof latitude === 'number' && typeof longitude === 'number'
+          ? `if (window.setUserPosition) { window.setUserPosition(${latitude}, ${longitude}, ${zoom}); }`
+          : ''}
         true;
       `;
       // @ts-ignore
       webviewRef.current.injectJavaScript(js);
     }
-  }, [showUserMarker]);
+  }, [showUserMarker, latitude, longitude, zoom]);
 
   const html = `
     <!DOCTYPE html>
@@ -119,11 +140,19 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
             userMarker.setLatLng([lat, lng]);
             // Keep current zoom if not provided
             var targetZoom = (typeof z === 'number' && !isNaN(z)) ? z : map.getZoom();
-            map.setView([lat, lng], targetZoom, { animate: true });
+            map.flyTo([lat, lng], targetZoom, { animate: true, duration: 0.6 });
             // Ensure marker is shown only when visibility is enabled
             if (userMarkerVisible && !map.hasLayer(userMarker)) {
               userMarker.addTo(map);
             }
+          } catch (e) { /* noop */ }
+        }
+
+        // Recenter without touching marker state
+        window.recenterOnly = function(lat, lng, z) {
+          try {
+            var targetZoom = (typeof z === 'number' && !isNaN(z)) ? z : map.getZoom();
+            map.flyTo([lat, lng], targetZoom, { animate: true, duration: 0.6 });
           } catch (e) { /* noop */ }
         }
 
@@ -166,7 +195,9 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
       />
     </View>
   );
-};
+});
+
+OpenStreetMap.displayName = 'OpenStreetMap';
 
 const styles = StyleSheet.create({
   container: {
