@@ -49,7 +49,8 @@
     const FIXED_WFS_URLS = {
         buses: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3A%C3%9Altima%20posi%C3%A7%C3%A3o%20da%20frota&outputFormat=application%2Fjson',
         schedules: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AHor%C3%A1rios%20das%20Linhas&outputFormat=application%2Fjson',
-        stops: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AParadas%20de%20onibus&outputFormat=application%2Fjson'
+    stops: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AParadas%20de%20onibus&outputFormat=application%2Fjson',
+    lines: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3ALinhas%20de%20onibus&outputFormat=application%2Fjson'
     };
 
     function fixedWfsUrl(baseUrl, bbox4326) {
@@ -76,6 +77,11 @@
     }
     function getSchedulesWfsUrl() {
         const remote = FIXED_WFS_URLS.schedules;
+        return USE_PROXY ? `/proxy/fetch?url=${encodeURIComponent(remote)}` : remote;
+    }
+    function getLinesWfsUrl(bounds4326) {
+        // Ensure we force srsName=EPSG:4326 (Leaflet expects lon/lat)
+        const remote = fixedWfsUrl(FIXED_WFS_URLS.lines, bounds4326);
         return USE_PROXY ? `/proxy/fetch?url=${encodeURIComponent(remote)}` : remote;
     }
 
@@ -183,6 +189,18 @@
     let currentBusStopIcon = makeBusStopIcon(iconSizeForZoom(map.getZoom()));
     let currentBusIcon = makeBusIcon(iconSizeForZoom(map.getZoom()));
 
+    // Layer to display the selected bus route (trajeto)
+    const currentRouteLayer = L.geoJSON(null, {
+        style: {
+            color: '#1f6feb',
+            weight: 4,
+            opacity: 0.9
+        }
+    }).addTo(map);
+
+    // Cache for lines dataset to avoid repeated WFS fetches
+    let linesDataset = null; // FeatureCollection or null
+
     // Cluster groups
     const stopsCluster = L.markerClusterGroup({
         spiderfyOnMaxZoom: true,
@@ -237,6 +255,16 @@
         }),
         onEachFeature: (feature, layer) => {
             layer.bindPopup(buildBusPopup(feature.properties || {}));
+            // On click, draw the route for this bus (based on its line code)
+            layer.on('click', async () => {
+                const p = feature?.properties || {};
+                const codeRaw = (p.cd_linha ?? p.linha ?? p.servico ?? '').toString().trim();
+                if (!codeRaw) {
+                    log('ROUTE', 'no line code on bus feature');
+                    return;
+                }
+                await drawRouteForLineCode(codeRaw);
+            });
             const stopDrag = () => map.dragging.disable();
             const startDrag = () => map.dragging.enable();
             layer.on('mousedown touchstart', (e) => {
@@ -685,6 +713,65 @@
                 Data local: ${datalocal}
             </div>
         `;
+    }
+
+    // Helpers to draw route (trajeto) by line code
+    function matchLineCode(props = {}, codeRaw = '') {
+        const norm = (v) => (v ?? '').toString().trim().toUpperCase();
+        const digitOnly = (v) => norm(v).replace(/[^0-9]/g, '').replace(/^0+/, '');
+        const target = norm(codeRaw);
+        const targetDigits = digitOnly(codeRaw);
+        if (!target) return false;
+        const candidates = [props.cd_linha, props.linha, props.servico, props.cd_linha_principal, props.codigo, props.cod_linha]
+            .map(v => ({ raw: norm(v), digits: digitOnly(v) }))
+            .filter(c => !!c.raw);
+        // Match by raw equality OR by digits-only equality ignoring leading zeros
+        return candidates.some(c => c.raw === target || (c.digits && c.digits === targetDigits));
+    }
+
+    async function ensureLinesDataset() {
+        if (linesDataset) return linesDataset;
+        try {
+            setStatus('Carregando trajetos das linhas...');
+            const url = getLinesWfsUrl() + `&_=${Date.now()}`;
+            log('ROUTE', 'fetch lines', url);
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            log('ROUTE', 'lines status', resp.status);
+            if (!resp.ok) throw new Error(`Erro WFS Linhas: ${resp.status}`);
+            linesDataset = await resp.json();
+            setStatus('Trajetos carregados');
+        } catch (e) {
+            console.error('Falha ao carregar linhas:', e);
+            setStatus('Falha ao carregar trajetos', false);
+        }
+        return linesDataset;
+    }
+
+    async function drawRouteForLineCode(codeRaw) {
+        try {
+            const ds = await ensureLinesDataset();
+            if (!ds || !Array.isArray(ds.features)) return;
+            // Clear previous route
+            currentRouteLayer.clearLayers();
+            // Filter matching features
+            const feats = ds.features.filter(f => matchLineCode(f.properties || {}, codeRaw));
+            if (!feats.length) {
+                log('ROUTE', `no features for code ${codeRaw}`);
+                showUpdatedToast(false);
+                return;
+            }
+            const gj = { type: 'FeatureCollection', features: feats };
+            currentRouteLayer.addData(gj);
+            try {
+                const b = currentRouteLayer.getBounds();
+                if (b && b.isValid()) map.fitBounds(b.pad(0.15));
+            } catch {}
+            showUpdatedToast(true);
+            log('ROUTE', `drawn route for ${codeRaw} (features=${feats.length})`);
+        } catch (e) {
+            console.error('Falha ao desenhar trajeto:', e);
+            showUpdatedToast(false);
+        }
     }
 
     // Compact popup for stops (only description and code)
