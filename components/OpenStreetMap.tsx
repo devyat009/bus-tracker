@@ -146,34 +146,71 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
         .controls button:active { transform: translateY(1px); }
 
         /* Loading indicator */
-        #loading { position: absolute; top: 10px; left: 10px; z-index: 1000; display: none; background: rgba(0,0,0,0.6); color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 12px; }
+        #loading { position: absolute; top: 10px; left: 10px; z-index: 1000; display: none; background: rgba(0,0,0,0.6); color: #fff; padding: 6px 10px 16px 10px; border-radius: 8px; font-size: 12px; min-width: 120px; }
+        #loading-bar {
+          position: absolute;
+          left: 0; bottom: 0; height: 4px; width: 100%;
+          background: rgba(255,255,255,0.2);
+          border-radius: 0 0 8px 8px;
+          overflow: hidden;
+        }
+        #loading-bar-inner {
+          height: 100%; width: 0%; background: #1f6feb;
+          border-radius: 0 0 8px 8px;
+          transition: width 0.3s cubic-bezier(.4,0,.2,1);
+        }
         /* Toast */
         #toast { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; z-index: 1100; display: none; max-width: 90%; text-align: center; }
       </style>
     </head>
     <body>
       <div id="map"></div>
-      <div id="loading">Carregando…</div>
+      <div id="loading">Carregando…
+        <div id="loading-bar"><div id="loading-bar-inner"></div></div>
+      </div>
       <div id="toast"></div>
       <div class="controls">
         <label><input id="chkBuses" type="checkbox" checked /> Mostrar ônibus</label>
         <label><input id="chkStops" type="checkbox" checked /> Mostrar paradas</label>
         <label><input id="chkOnlyActive" type="checkbox" /> Apenas ônibus ativos</label>
-        <div class="row">
-          <input id="txtLine" type="text" placeholder="Buscar linha (ex: 0.123)" />
-          <button id="btnSearch">Buscar</button>
+        <div class="row" style="flex-direction:column;align-items:stretch;">
+          <div id="selectedLines" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;"></div>
+          <input id="txtLine" type="text" placeholder="Buscar linha (ex: 0.123)" autocomplete="off" />
+          <div id="autocompleteList" style="position:relative;"></div>
         </div>
+        <button id="btnSearch" style="margin-top:6px;">Buscar</button>
       </div>
       <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
       <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
       <script>
         // UI helpers
+        var loadingBarTimer = null;
         function setLoading(active, text) {
           try {
             var el = document.getElementById('loading');
+            var bar = document.getElementById('loading-bar-inner');
             if (!el) return;
-            if (typeof text === 'string' && text) { el.textContent = text; }
-            el.style.display = active ? 'block' : 'none';
+            if (typeof text === 'string' && text) {
+              // Só altera o texto, não remove a barra
+              el.childNodes[0].textContent = text;
+            }
+            if (active) {
+              el.style.display = 'block';
+              if (bar) {
+                bar.style.width = '0%';
+                setTimeout(function(){ bar.style.width = '80%'; }, 50);
+                clearTimeout(loadingBarTimer);
+                loadingBarTimer = setTimeout(function(){ bar.style.width = '95%'; }, 2000);
+              }
+            } else {
+              if (bar) {
+                bar.style.width = '100%';
+                setTimeout(function(){ el.style.display = 'none'; bar.style.width = '0%'; }, 400);
+              } else {
+                el.style.display = 'none';
+              }
+              clearTimeout(loadingBarTimer);
+            }
           } catch (e) {}
         }
         var toastTimer = null;
@@ -237,10 +274,58 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
   var showStops = true, showBuses = true;
   var clusterEnabled = true; // clustering is default and always on
   var showOnlyActiveBuses = false; // when true, only buses with a linha value are shown
+        // Multiselect de linhas
+        var allLinesList = []; // [{label, value}]
+        var selectedLines = []; // [{label, value}]
         var filterLine = '';
         function normalizeLine(s) {
           var t = (s==null?'':String(s)).toUpperCase().trim();
           return { raw: t, digits: t.replace(/[^0-9]/g, '').replace(/^0+/, '') };
+        }
+        function renderSelectedLines() {
+          var cont = document.getElementById('selectedLines');
+          if (!cont) return;
+          cont.innerHTML = '';
+          selectedLines.forEach(function(line, idx) {
+            var chip = document.createElement('span');
+            chip.style.cssText = 'background:#e3e3e3;border-radius:12px;padding:2px 8px 2px 8px;display:flex;align-items:center;font-size:13px;margin:2px;';
+            chip.textContent = line.label + ' ';
+            var x = document.createElement('span');
+            x.textContent = '×';
+            x.style.cssText = 'margin-left:4px;cursor:pointer;color:#c30505;font-weight:bold;';
+            x.onclick = function() {
+              selectedLines.splice(idx, 1);
+              renderSelectedLines();
+              refreshBuses();
+            };
+            chip.appendChild(x);
+            cont.appendChild(chip);
+          });
+        }
+        function updateAutocompleteList(val) {
+          var list = document.getElementById('autocompleteList');
+          if (!list) return;
+          list.innerHTML = '';
+          if (!val) return;
+          var norm = val.toUpperCase().trim();
+          var filtered = allLinesList.filter(function(l) {
+            return l.label.indexOf(norm) !== -1 || l.value.indexOf(norm) !== -1;
+          }).slice(0, 10);
+          filtered.forEach(function(line) {
+            var item = document.createElement('div');
+            item.textContent = line.label;
+            item.style.cssText = 'background:#fff;border:1px solid #ccc;padding:4px 8px;cursor:pointer;';
+            item.onclick = function() {
+              if (!selectedLines.some(function(l){return l.value===line.value;})) {
+                selectedLines.push(line);
+                renderSelectedLines();
+                refreshBuses();
+              }
+              document.getElementById('txtLine').value = '';
+              list.innerHTML = '';
+            };
+            list.appendChild(item);
+          });
         }
 
         // Custom pulsating marker
@@ -345,12 +430,12 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
         }
 
         function fetchJson(url) {
-          rnLog('NET', 'GET ' + url);
+          // rnLog('NET', 'GET ' + url);
           if (window.ReactNativeWebView) {
             // Use RN bridge to bypass CORS in WebView
             return nativeFetch(url).catch(function (e) { rnLog('NET', 'FETCH_ERR ' + url, String(e && e.message || e)); throw e; });
           } else {
-            return fetch(url, { headers: { 'accept': 'application/json' } })
+            return fetch(url, { headers: { 'accept': 'application/json' }, cache: 'no-store' })
               .then(function (r) { if (!r.ok) { rnLog('NET', 'HTTP ' + r.status + ' ' + url); throw new Error('HTTP ' + r.status); } return r.json(); })
               .catch(function (e) { rnLog('NET', 'FETCH_ERR ' + url, String(e && e.message || e)); throw e; });
           }
@@ -581,7 +666,7 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
           if (stopsRequested) { rnLog('STOPS', 'already-requested'); setLoading(false); return Promise.resolve(); }
           stopsRequested = true;
           var url = b ? withBboxForBounds(WFS_URLS.stops, b) : withBbox(WFS_URLS.stops);
-          rnLog('STOPS', 'load', { url: url });
+          // rnLog('STOPS', 'load', { url: url });
           return fetchJson(url)
             .then(function (geojson) {
               stopsCache = { geojson: geojson, bounds: b };
@@ -613,18 +698,40 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
             .then(function (geojson) {
               lastBusesGeoJson = geojson;
               try {
+                // updates the autocomplete
                 var feats = (geojson && geojson.features) || [];
-                var f = normalizeLine(filterLine);
-                if (f.raw) {
+                // Log detalhado dos ônibus encontrados
+                try {
+                  var logArr = feats.map(function(f) {
+                    var p = f.properties||{};
+                    var coords = (f.geometry && f.geometry.coordinates) ? f.geometry.coordinates : [];
+                    return {
+                      prefixo: p.prefixo,
+                      linha: p.cd_linha || p.linha || p.servico,
+                      datalocal: p.datalocal,
+                      coords: coords
+                    };
+                  });
+                  // rnLog('BUSES', 'found', logArr);
+                } catch(e){}
+                var seen = {};
+                allLinesList = feats.map(function(f){
+                  var p = f.properties||{};
+                  var label = (p.cd_linha || p.linha || p.servico || p.cd_linha_principal || p.codigo || p.cod_linha || '').toString().toUpperCase().trim();
+                  return { label: label, value: label };
+                }).filter(function(l){
+                  if (!l.label || seen[l.label]) return false;
+                  seen[l.label] = true;
+                  return true;
+                });
+                if (selectedLines.length > 0) {
                   feats = feats.filter(function (feat) {
                     var p = feat && feat.properties || {};
                     var cands = [p.cd_linha, p.linha, p.servico, p.codigo, p.cod_linha]
-                      .map(function (v) { var s = (v==null?'':String(v)).toUpperCase().trim(); return { raw: s, digits: s.replace(/[^0-9]/g, '').replace(/^0+/, '') }; })
-                      .filter(function (c) { return !!c.raw; });
-                    for (var i=0;i<cands.length;i++) {
-                      if (cands[i].raw === f.raw || (cands[i].digits && cands[i].digits === f.digits)) return true;
-                    }
-                    return false;
+                      .map(function (v) { return (v==null?'':String(v)).toUpperCase().trim(); });
+                    return selectedLines.some(function(line){
+                      return cands.includes(line.value);
+                    });
                   });
                 }
                 if (showOnlyActiveBuses) {
@@ -633,8 +740,6 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
                 var filteredGeo = { type: 'FeatureCollection', features: feats };
                 busesLayer.clearLayers();
                 busesLayer.addData(filteredGeo);
-                var count = feats.length;
-                rnLog('BUSES', 'loaded', { count: count, filteredBy: f.raw || '' });
                 if (clusterEnabled) { ensureClusters(); rebuildBusesCluster(); if (map.hasLayer(busesLayer)) { map.removeLayer(busesLayer); } }
               } catch (e) { rnLog('BUSES', 'layer_error', String(e && e.message || e)); }
             })
@@ -682,9 +787,12 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
     chkBuses.addEventListener('change', function(){ showBuses = !!chkBuses.checked; if (clusterEnabled) { if (showBuses) { ensureClusters(); if (busesCluster && !map.hasLayer(busesCluster)) busesCluster.addTo(map); } else { if (busesCluster && map.hasLayer(busesCluster)) map.removeLayer(busesCluster); } } else { if (showBuses) { if (!map.hasLayer(busesLayer)) busesLayer.addTo(map); } else { if (map.hasLayer(busesLayer)) map.removeLayer(busesLayer); } } });
     chkStops.addEventListener('change', function(){ showStops = !!chkStops.checked; if (clusterEnabled) { if (showStops) { ensureClusters(); if (stopsCluster && !map.hasLayer(stopsCluster)) stopsCluster.addTo(map); } else { if (stopsCluster && map.hasLayer(stopsCluster)) map.removeLayer(stopsCluster); } } else { if (showStops) { if (!map.hasLayer(stopsLayer)) stopsLayer.addTo(map); } else { if (map.hasLayer(stopsLayer)) map.removeLayer(stopsLayer); } } });
     if (chkOnlyActive) { chkOnlyActive.addEventListener('change', function(){ showOnlyActiveBuses = !!chkOnlyActive.checked; refreshBuses(); }); }
-    function applySearch() { var val = (txtLine && txtLine.value) || ''; filterLine = val; refreshBuses(); if (val && val.trim()) { try { window.setBusRoute(val); } catch (e) {} } }
+    function applySearch() { refreshBuses(); if (selectedLines.length > 0) { try { window.setBusRoute(selectedLines[0].value); } catch (e) {} } }
     btnSearch.addEventListener('click', applySearch);
+    txtLine.addEventListener('input', function(ev){ updateAutocompleteList(ev.target.value); });
     txtLine.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') { applySearch(); } });
+    renderSelectedLines();
+  // populateLinesFromBuses removido: agora é feito em refreshBuses
   } catch (e) {}
 
   // Kick off initial buses refresh; preload lines for instant route drawing
@@ -710,7 +818,7 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
         javaScriptEnabled
         domStorageEnabled
         scrollEnabled={false}
-        onMessage={(event) => {
+        onMessage={async (event) => {
           try {
             const data = JSON.parse(event.nativeEvent.data);
             if (!data) return;
@@ -719,10 +827,18 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
               return;
             }
             if (data.type === 'fetch' && data.id && data.url) {
-              // Perform native fetch via centralized service and send back to WebView as text
+              // Se for requisição de ônibus, nunca usar cache
+              const isBuses = data.url.includes('typeName=semob%3A%C3%9Altima%20posi%C3%A7%C3%A3o%20da%20frota');
               (async () => {
                 try {
-                  const resp = await fetchWithCache(data.url, { headers: { accept: 'application/json' } });
+                  let resp;
+                  if (isBuses) {
+                    const r = await fetch(data.url, { headers: { accept: 'application/json' }, cache: 'no-store' });
+                    const text = await r.text();
+                    resp = { ok: r.ok, status: r.status, text };
+                  } else {
+                    resp = await fetchWithCache(data.url, { headers: { accept: 'application/json' } });
+                  }
                   const js = `window.__deliverFetchText(${Number(data.id)}, ${resp.ok ? 'true' : 'false'}, ${resp.status}, ${JSON.stringify(resp.text)}); true;`;
                   // @ts-ignore
                   webviewRef.current && webviewRef.current.injectJavaScript(js);

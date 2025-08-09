@@ -39,12 +39,12 @@ function ttlForUrl(rawUrl: string): number | undefined {
       // Lines change rarely: cache for 24h
       return 24 * 60 * 60 * 1000;
     }
-    if (n.includes('paradas') || n.includes('ponto') || n.includes('onibus')) {
+    if (n.includes('paradas') || n.includes('ponto')) {
       // Stops: cache for 5 minutes
       if (n.includes('paradas')) return 5 * 60 * 1000;
-      // Última posição da frota (buses): cache very short
-      if (n.includes('ultima') || n.includes('posicao') || n.includes('frota')) return 10 * 1000;
     }
+    // Última posição da frota (buses): nunca cachear
+    if (n.includes('ultima') || n.includes('posicao') || n.includes('frota')) return 0;
   } catch {
     // ignore parse errors
   }
