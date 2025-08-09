@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { fetchWithCache } from "../src/services/http";
 
 interface OpenStreetMapProps {
   latitude?: number;
@@ -157,7 +158,7 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
       <div class="controls">
         <label><input id="chkBuses" type="checkbox" checked /> Mostrar ônibus</label>
         <label><input id="chkStops" type="checkbox" checked /> Mostrar paradas</label>
-        <label><input id="chkCluster" type="checkbox" /> Clusterizar marcadores</label>
+        <label><input id="chkOnlyActive" type="checkbox" /> Apenas ônibus ativos</label>
         <div class="row">
           <input id="txtLine" type="text" placeholder="Buscar linha (ex: 0.123)" />
           <button id="btnSearch">Buscar</button>
@@ -233,7 +234,9 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
         rnLog('INIT', 'Leaflet map created');
 
         // UI state
-        var showStops = true, showBuses = true, clusterEnabled = false;
+  var showStops = true, showBuses = true;
+  var clusterEnabled = true; // clustering is default and always on
+  var showOnlyActiveBuses = false; // when true, only buses with a linha value are shown
         var filterLine = '';
         function normalizeLine(s) {
           var t = (s==null?'':String(s)).toUpperCase().trim();
@@ -290,9 +293,9 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
         // WFS endpoints & helpers
         // =========================
         var WFS_URLS = {
-          buses: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3A%C3%9Altima%20posi%C3%A7%C3%A3o%20da%20frota&outputFormat=application%2Fjson',
-          stops: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AParadas%20de%20onibus&outputFormat=application%2Fjson',
-          lines: 'https://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3ALinhas%20de%20onibus&outputFormat=application%2Fjson'
+          buses: 'http://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3A%C3%9Altima%20posi%C3%A7%C3%A3o%20da%20frota&outputFormat=application%2Fjson',
+          stops: 'http://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AParadas%20de%20onibus&outputFormat=application%2Fjson',
+          lines: 'http://geoserver.semob.df.gov.br/geoserver/semob/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3ALinhas%20de%20onibus&outputFormat=application%2Fjson'
         };
 
         function bboxParamFromMap() {
@@ -412,8 +415,8 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
           currentBusIcon = makeBusIcon(size);
           try { stopsLayer.eachLayer(function (m) { m.setIcon && m.setIcon(currentStopIcon); }); } catch (e) {}
           try { busesLayer.eachLayer(function (m) { m.setIcon && m.setIcon(currentBusIcon); }); } catch (e) {}
-          try { if (stopsCluster) { stopsCluster.eachLayer(function (m){ m.setIcon && m.setIcon(currentStopIcon); }); } } catch (e) {}
-          try { if (busesCluster) { busesCluster.eachLayer(function (m){ m.setIcon && m.setIcon(currentBusIcon); }); } } catch (e) {}
+          try { if (stopsCluster) { stopsCluster.eachLayer(function (m){ m.setIcon && m.setIcon(currentStopIcon); }); if (stopsCluster.refreshClusters) { stopsCluster.refreshClusters(); } } } catch (e) {}
+          try { if (busesCluster) { busesCluster.eachLayer(function (m){ m.setIcon && m.setIcon(currentBusIcon); }); if (busesCluster.refreshClusters) { busesCluster.refreshClusters(); } } } catch (e) {}
           rnLog('MAP', 'zoomend', { zoom: map.getZoom(), iconSize: size });
         });
 
@@ -436,7 +439,20 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
             var p = feature && feature.properties || {};
             var prefixo = p.prefixo || '—';
             var linha = (p.cd_linha || p.linha || p.servico || '—');
-            layer.bindPopup('<strong>Ônibus ' + String(prefixo) + '</strong><br/>Linha: ' + String(linha));
+            var velocidade = (p.velocidade != null ? p.velocidade : '—');
+            var sentido = (p.sentido != null ? p.sentido : '—');
+            var datalocal = (p.datalocal != null ? p.datalocal : '—');
+            var tarifa = (p.tarifa || p.vl_tarifa || p.valor_tarifa || p.preco || p.valor);
+            function fmtTarifa(v){ var n = Number(v); return isFinite(n) ? ('R$ ' + n.toFixed(2).replace('.', ',')) : null; }
+            var tarifaLine = (tarifa!=null && tarifa!=='' && tarifa!=='—') ? ('<br/>Tarifa: ' + (fmtTarifa(tarifa) || String(tarifa))) : '';
+            var html = '<div><strong>Ônibus ' + String(prefixo) + '</strong><br/>' +
+              'Linha: ' + String(linha) + '<br/>' +
+              'Velocidade: ' + String(velocidade) + ' km/h<br/>' +
+              'Sentido: ' + String(sentido) + '<br/>' +
+              'Data local: ' + String(datalocal) +
+              tarifaLine +
+              '</div>';
+            layer.bindPopup(html);
             layer.on('click', function () {
               var codeRaw = (p.cd_linha || p.linha || p.servico || '').toString().trim();
               if (codeRaw) { window.setBusRoute(codeRaw); }
@@ -447,17 +463,55 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
         function ensureClusters() {
           if (!clusterEnabled) return;
           if (!L.markerClusterGroup) { showToast('Plugin de cluster não disponível'); clusterEnabled = false; return; }
-          if (!stopsCluster) { stopsCluster = L.markerClusterGroup(); }
-          if (!busesCluster) { busesCluster = L.markerClusterGroup(); }
+          var created = false;
+          if (!stopsCluster) {
+            stopsCluster = L.markerClusterGroup({
+              spiderfyOnMaxZoom: true,
+              showCoverageOnHover: false,
+              zoomToBoundsOnClick: true,
+              disableClusteringAtZoom: 18,
+              removeOutsideVisibleBounds: true,
+              spiderfyDistanceMultiplier: 1.2,
+              maxClusterRadius: function (zoom) {
+                if (zoom >= 18) return 1; // effectively no clustering at very high zoom
+                if (zoom >= 17) return 20;
+                if (zoom >= 16) return 40;
+                return 60;
+              }
+            });
+            created = true;
+          }
+          if (!busesCluster) {
+            busesCluster = L.markerClusterGroup({
+              spiderfyOnMaxZoom: true,
+              showCoverageOnHover: false,
+              zoomToBoundsOnClick: true,
+              disableClusteringAtZoom: 18,
+              removeOutsideVisibleBounds: true,
+              spiderfyDistanceMultiplier: 1.2,
+              maxClusterRadius: function (zoom) {
+                if (zoom >= 18) return 1;
+                if (zoom >= 17) return 20;
+                if (zoom >= 16) return 40;
+                return 60;
+              }
+            });
+            created = true;
+          }
           // Attach to map if visible
           if (showStops && !map.hasLayer(stopsCluster)) { stopsCluster.addTo(map); }
           if (showBuses && !map.hasLayer(busesCluster)) { busesCluster.addTo(map); }
+          // When clustering is active, hide base layers to avoid duplicates
+          try { if (map.hasLayer(stopsLayer)) { map.removeLayer(stopsLayer); } } catch (e) {}
+          try { if (map.hasLayer(busesLayer)) { map.removeLayer(busesLayer); } } catch (e) {}
+          // If clusters were created now, seed them from existing layers
+          if (created) { try { rebuildStopsCluster(); rebuildBusesCluster(); } catch (e) {} }
         }
         function clearClusters() {
           try { if (stopsCluster) { stopsCluster.clearLayers(); } } catch (e) {}
           try { if (busesCluster) { busesCluster.clearLayers(); } } catch (e) {}
         }
-        function rebuildStopsCluster() {
+    function rebuildStopsCluster() {
           if (!clusterEnabled || !stopsCluster) return;
           try { stopsCluster.clearLayers(); } catch (e) {}
           try {
@@ -470,9 +524,10 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
                 stopsCluster.addLayer(mk);
               } catch (e) {}
             });
+      if (stopsCluster.refreshClusters) { stopsCluster.refreshClusters(); }
           } catch (e) {}
         }
-        function rebuildBusesCluster() {
+    function rebuildBusesCluster() {
           if (!clusterEnabled || !busesCluster) return;
           try { busesCluster.clearLayers(); } catch (e) {}
           try {
@@ -485,32 +540,56 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
                 busesCluster.addLayer(mk);
               } catch (e) {}
             });
+      if (busesCluster.refreshClusters) { busesCluster.refreshClusters(); }
           } catch (e) {}
         }
 
         // =========================
         // Data loading
         // =========================
-        var stopsCache = null; // GeoJSON cache
+        var stopsCache = { geojson: null, bounds: null }; // cache with bounds snapshot
         var stopsRequested = false;
-        function loadStopsOnceForBounds(bounds) {
+        function boundsChangedSignificantly(oldB, newB) {
+          try {
+            if (!oldB || !newB) return true;
+            var oldC = oldB.getCenter && oldB.getCenter();
+            var newC = newB.getCenter && newB.getCenter();
+            if (!oldC || !newC) return true;
+            var dist = map.distance(oldC, newC);
+            // compare vertical span as a proxy for zoom/extent change
+            var oldSpan = Math.abs(oldB.getNorthEast().lat - oldB.getSouthWest().lat);
+            var newSpan = Math.abs(newB.getNorthEast().lat - newB.getSouthWest().lat);
+            return dist > 1000 || Math.abs(oldSpan - newSpan) > 0.01;
+          } catch (e) { return true; }
+        }
+        function loadStopsForBounds(bounds) {
           setLoading(true, 'Carregando paradas…');
-          if (stopsCache) { rnLog('STOPS', 'cache-hit', { count: (stopsCache.features||[]).length }); return Promise.resolve(); }
-          if (stopsRequested) { rnLog('STOPS', 'already-requested'); return Promise.resolve(); }
-          stopsRequested = true;
           // pad bounds a bit to cover slight pans
           var b = null;
           try { b = bounds && bounds.pad ? bounds.pad(0.2) : bounds; } catch (e) { b = bounds; }
+          // If we have cache for similar bounds, just render cached data
+          try {
+            if (stopsCache.geojson && stopsCache.bounds && !boundsChangedSignificantly(stopsCache.bounds, b)) {
+              rnLog('STOPS', 'cache-hit', { count: (stopsCache.geojson.features||[]).length });
+              stopsLayer.clearLayers();
+              stopsLayer.addData(stopsCache.geojson);
+              if (clusterEnabled) { ensureClusters(); rebuildStopsCluster(); if (map.hasLayer(stopsLayer)) { map.removeLayer(stopsLayer); } }
+              setLoading(false);
+              return Promise.resolve();
+            }
+          } catch (e) { /* fallback to network */ }
+          if (stopsRequested) { rnLog('STOPS', 'already-requested'); setLoading(false); return Promise.resolve(); }
+          stopsRequested = true;
           var url = b ? withBboxForBounds(WFS_URLS.stops, b) : withBbox(WFS_URLS.stops);
-          rnLog('STOPS', 'load-once', { url: url });
+          rnLog('STOPS', 'load', { url: url });
           return fetchJson(url)
             .then(function (geojson) {
-              stopsCache = geojson;
+              stopsCache = { geojson: geojson, bounds: b };
               try {
                 stopsLayer.clearLayers();
                 stopsLayer.addData(geojson);
                 var count = (geojson && geojson.features && geojson.features.length) || 0;
-                rnLog('STOPS', 'loaded-once', { count: count });
+                rnLog('STOPS', 'loaded', { count: count });
                 if (clusterEnabled) { ensureClusters(); rebuildStopsCluster(); if (map.hasLayer(stopsLayer)) { map.removeLayer(stopsLayer); } }
               } catch (e) { rnLog('STOPS', 'layer_error', String(e && e.message || e)); }
             })
@@ -518,6 +597,15 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
             .finally(function () { stopsRequested = false; setLoading(false); });
         }
         var lastBusesGeoJson = null;
+        function isActiveBusFeature(feat){
+          try {
+            var p = (feat && feat.properties) || {};
+            var v = (p.cd_linha || p.linha || p.servico || '').toString().trim().toUpperCase();
+            if (!v) return false;
+            if (v === 'NULL' || v === 'N/A') return false;
+            return true;
+          } catch (e) { return false; }
+        }
         function refreshBuses() {
           var url = withBbox(WFS_URLS.buses);
           setLoading(true, 'Carregando ônibus…');
@@ -538,6 +626,9 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
                     }
                     return false;
                   });
+                }
+                if (showOnlyActiveBuses) {
+                  feats = feats.filter(isActiveBusFeature);
                 }
                 var filteredGeo = { type: 'FeatureCollection', features: feats };
                 busesLayer.clearLayers();
@@ -573,8 +664,8 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
               try { routeLayer.clearLayers(); routeLayer.addData({ type: 'FeatureCollection', features: filtered }); } catch (e) {}
               var routeBounds = null;
               try { var bnds = routeLayer.getBounds(); if (bnds && bnds.isValid()) { routeBounds = bnds; } } catch (e) {}
-              // Load stops only once using route bounds (cached)
-              try { loadStopsOnceForBounds(routeBounds || map.getBounds()); } catch (e) {}
+              // Load stops using route bounds with cache awareness
+              try { loadStopsForBounds(routeBounds || map.getBounds()); } catch (e) {}
               rnLog('ROUTE', 'setBusRoute done', { total: feats.length, matched: filtered.length });
             })
             .catch(function (e) { rnLog('ROUTE', 'error', String(e && e.message || e)); });
@@ -585,13 +676,12 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
   try {
     var chkBuses = document.getElementById('chkBuses');
     var chkStops = document.getElementById('chkStops');
-    var chkCluster = document.getElementById('chkCluster');
+    var chkOnlyActive = document.getElementById('chkOnlyActive');
     var txtLine = document.getElementById('txtLine');
     var btnSearch = document.getElementById('btnSearch');
     chkBuses.addEventListener('change', function(){ showBuses = !!chkBuses.checked; if (clusterEnabled) { if (showBuses) { ensureClusters(); if (busesCluster && !map.hasLayer(busesCluster)) busesCluster.addTo(map); } else { if (busesCluster && map.hasLayer(busesCluster)) map.removeLayer(busesCluster); } } else { if (showBuses) { if (!map.hasLayer(busesLayer)) busesLayer.addTo(map); } else { if (map.hasLayer(busesLayer)) map.removeLayer(busesLayer); } } });
     chkStops.addEventListener('change', function(){ showStops = !!chkStops.checked; if (clusterEnabled) { if (showStops) { ensureClusters(); if (stopsCluster && !map.hasLayer(stopsCluster)) stopsCluster.addTo(map); } else { if (stopsCluster && map.hasLayer(stopsCluster)) map.removeLayer(stopsCluster); } } else { if (showStops) { if (!map.hasLayer(stopsLayer)) stopsLayer.addTo(map); } else { if (map.hasLayer(stopsLayer)) map.removeLayer(stopsLayer); } } });
-    chkCluster.addEventListener('change', function(){ clusterEnabled = !!chkCluster.checked; if (clusterEnabled) { ensureClusters(); rebuildStopsCluster(); rebuildBusesCluster(); if (map.hasLayer(stopsLayer)) map.removeLayer(stopsLayer); if (map.hasLayer(busesLayer)) map.removeLayer(busesLayer); } else { if (stopsCluster && map.hasLayer(stopsCluster)) map.removeLayer(stopsCluster); if (busesCluster && map.hasLayer(busesCluster)) map.removeLayer(busesCluster); if (showStops && !map.hasLayer(stopsLayer)) stopsLayer.addTo(map); if (showBuses && !map.hasLayer(busesLayer)) busesLayer.addTo(map); }
-    });
+    if (chkOnlyActive) { chkOnlyActive.addEventListener('change', function(){ showOnlyActiveBuses = !!chkOnlyActive.checked; refreshBuses(); }); }
     function applySearch() { var val = (txtLine && txtLine.value) || ''; filterLine = val; refreshBuses(); if (val && val.trim()) { try { window.setBusRoute(val); } catch (e) {} } }
     btnSearch.addEventListener('click', applySearch);
     txtLine.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') { applySearch(); } });
@@ -599,8 +689,11 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
 
   // Kick off initial buses refresh; preload lines for instant route drawing
   ensureLinesDataset().catch(function(){});
+  ensureClusters();
   refreshBuses();
-  map.on('moveend', function () { rnLog('MAP', 'moveend'); refreshBuses(); });
+  // initial stops for current view
+  try { loadStopsForBounds(map.getBounds()); } catch (e) {}
+  map.on('moveend', function () { rnLog('MAP', 'moveend'); refreshBuses(); try { loadStopsForBounds(map.getBounds()); } catch (e) {} });
         setInterval(function () { refreshBuses(); }, 10000);
       </script>
     </body>
@@ -626,12 +719,11 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
               return;
             }
             if (data.type === 'fetch' && data.id && data.url) {
-              // Perform native fetch to bypass CORS and send back to WebView as text
+              // Perform native fetch via centralized service and send back to WebView as text
               (async () => {
                 try {
-                  const resp = await fetch(data.url, { headers: { accept: 'application/json' } });
-                  const text = await resp.text();
-                  const js = `window.__deliverFetchText(${Number(data.id)}, ${resp.ok ? 'true' : 'false'}, ${resp.status}, ${JSON.stringify(text)}); true;`;
+                  const resp = await fetchWithCache(data.url, { headers: { accept: 'application/json' } });
+                  const js = `window.__deliverFetchText(${Number(data.id)}, ${resp.ok ? 'true' : 'false'}, ${resp.status}, ${JSON.stringify(resp.text)}); true;`;
                   // @ts-ignore
                   webviewRef.current && webviewRef.current.injectJavaScript(js);
                 } catch (err: any) {
@@ -651,6 +743,12 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
           const js = `
             if (window.setUserMarkerVisible) { window.setUserMarkerVisible(${showUserMarker ? 'true' : 'false'}); }
             ${typeof latitude === 'number' && typeof longitude === 'number' ? `if (window.setUserPosition) { window.setUserPosition(${latitude}, ${longitude}, ${zoom}); }` : ''}
+            // Trigger initial stops load with current bounds keeping internal cache
+            try {
+              var b = (window.map && window.map.getBounds && window.map.getBounds()) || null;
+              if (window.loadStopsForBounds) { window.loadStopsForBounds(b); }
+              else if (window.loadStopsOnceForBounds) { window.loadStopsOnceForBounds(b); }
+            } catch(e) {}
             true;
           `;
           // @ts-ignore
