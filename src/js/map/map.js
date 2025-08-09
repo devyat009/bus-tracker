@@ -200,6 +200,8 @@
 
     // Cache for lines dataset to avoid repeated WFS fetches
     let linesDataset = null; // FeatureCollection or null
+    // Control whether we auto-fit to the route after drawing (disabled per user request)
+    let autoFitRoute = false;
 
     // Cluster groups
     const stopsCluster = L.markerClusterGroup({
@@ -259,11 +261,32 @@
             layer.on('click', async () => {
                 const p = feature?.properties || {};
                 const codeRaw = (p.cd_linha ?? p.linha ?? p.servico ?? '').toString().trim();
+                // Ensure popup stays visible
+                try { layer.openPopup(); } catch {}
                 if (!codeRaw) {
                     log('ROUTE', 'no line code on bus feature');
+                    // Try to enrich popup with tarifa from own props (if any)
+                    try { await maybeEnrichPopupWithTarifa(layer, p, null); } catch {}
                     return;
                 }
+                // Draw route
                 await drawRouteForLineCode(codeRaw);
+                // Prepare tarifa enrichment in parallel
+                const tarifaPromise = maybeEnrichPopupWithTarifa(layer, p, codeRaw).catch(() => {});
+                // After any zoom/fits caused by route drawing, ensure marker is visible and reopen popup
+                if (typeof busesCluster?.zoomToShowLayer === 'function') {
+                    busesCluster.zoomToShowLayer(layer, () => {
+                        Promise.resolve(tarifaPromise).finally(() => {
+                            try { layer.openPopup(); } catch {}
+                        });
+                    });
+                } else {
+                    map.once('moveend', () => {
+                        Promise.resolve(tarifaPromise).finally(() => {
+                            try { layer.openPopup(); } catch {}
+                        });
+                    });
+                }
             });
             const stopDrag = () => map.dragging.disable();
             const startDrag = () => map.dragging.enable();
@@ -698,12 +721,13 @@
         `;
     }
 
-    function buildBusPopup(props) {
+    function buildBusPopup(props, tarifaOverride) {
         const prefixo = pickProp(props, ['prefixo'], '—');
         const velocidade = pickProp(props, ['velocidade'], '—');
         const datalocal = pickProp(props, ['datalocal'], '—');
         const sentido = pickProp(props, ['sentido'], '—');
         const linha = pickProp(props, ['cd_linha', 'linha', 'servico'], '—');
+        const tarifa = tarifaOverride ?? pickProp(props, ['tarifa', 'vl_tarifa', 'valor_tarifa', 'preco', 'valor'], null);
         return `
             <div>
                 <strong>Ônibus ${prefixo}</strong><br/>
@@ -711,8 +735,47 @@
                 Velocidade: ${velocidade} km/h<br/>
                 Sentido: ${sentido}<br/>
                 Data local: ${datalocal}
+                ${tarifa != null && tarifa !== '—' && `${formatTarifaLine(tarifa)}` || ''}
             </div>
         `;
+    }
+
+    function formatTarifaLine(v) {
+        const num = Number(v);
+        if (Number.isFinite(num)) {
+            // Simple BRL format without relying on locale
+            const s = 'R$ ' + num.toFixed(2).replace('.', ',');
+            return `<br/>Tarifa: ${s}`;
+        }
+        return '';
+    }
+
+    async function maybeEnrichPopupWithTarifa(layer, busProps, codeRaw) {
+        try {
+            // If popup already has a tarifa line, skip
+            const popup = layer.getPopup?.();
+            const currentHtml = popup?.getContent?.() || '';
+            if (typeof currentHtml === 'string' && currentHtml.includes('Tarifa:')) return;
+
+            // Try from bus props first
+            let tarifa = pickProp(busProps || {}, ['tarifa', 'vl_tarifa', 'valor_tarifa', 'preco', 'valor'], null);
+            if (tarifa == null && codeRaw) {
+                // Fallback to lines dataset
+                const ds = await ensureLinesDataset();
+                const feat = ds?.features?.find(f => matchLineCode(f.properties || {}, codeRaw));
+                tarifa = feat?.properties?.tarifa ?? null;
+            }
+            if (tarifa == null) return;
+            const html = buildBusPopup(busProps || {}, tarifa);
+            if (popup && popup.setContent) {
+                popup.setContent(html);
+                try { layer.openPopup(); } catch {}
+            } else {
+                try { layer.bindPopup(html).openPopup(); } catch {}
+            }
+        } catch (e) {
+            log('POPUP', 'maybeEnrichPopupWithTarifa error', e);
+        }
     }
 
     // Helpers to draw route (trajeto) by line code
@@ -763,8 +826,10 @@
             const gj = { type: 'FeatureCollection', features: feats };
             currentRouteLayer.addData(gj);
             try {
-                const b = currentRouteLayer.getBounds();
-                if (b && b.isValid()) map.fitBounds(b.pad(0.15));
+                if (autoFitRoute) {
+                    const b = currentRouteLayer.getBounds();
+                    if (b && b.isValid()) map.fitBounds(b.pad(0.15));
+                }
             } catch {}
             showUpdatedToast(true);
             log('ROUTE', `drawn route for ${codeRaw} (features=${feats.length})`);
@@ -772,6 +837,14 @@
             console.error('Falha ao desenhar trajeto:', e);
             showUpdatedToast(false);
         }
+    }
+
+    // Optional: allow manual fit to the currently drawn route
+    function fitCurrentRoute(padding = 0.15) {
+        try {
+            const b = currentRouteLayer.getBounds();
+            if (b && b.isValid()) map.fitBounds(b.pad(padding));
+        } catch {}
     }
 
     // Compact popup for stops (only description and code)
