@@ -101,15 +101,25 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 28 28">
                     <defs>
                         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.3"/>
+                        <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.3"/>
                         </filter>
                     </defs>
-                    <circle cx="14" cy="14" r="12" fill="#32cd32" filter="url(#shadow)"/>
-                    <rect x="9" y="7" width="10" height="12" rx="2" ry="2" fill="#fff"/>
-                    <rect x="10.5" y="9" width="7" height="3" rx="1" ry="1" fill="#2e7d32"/>
-                    <rect x="10.5" y="13" width="7" height="4" rx="1" ry="1" fill="#c8e6c9"/>
-                    <circle cx="12" cy="20" r="1.2" fill="#fff"/>
-                    <circle cx="16" cy="20" r="1.2" fill="#fff"/>
+                    <!-- Rectangle -->
+                    <rect x="5" y="3" width="18" height="14" rx="3" ry="3" fill="#32cd32" filter="url(#shadow)"/>
+                    <!-- Triangulum -->
+                    <path d="M9 17 L19 17 L14 23 Z" fill="#32cd32" filter="url(#shadow)"/>
+                    <!-- Sign and Pole -->
+                    <!-- Sign pole -->
+                    <rect x="7.5" y="7" width="1" height="5" fill="#fff"/> <!-- haste -->
+                    <!-- Sign -->
+                    <rect x="6.5" y="5" width="3" height="2" rx="0.5" ry="0.5" fill="#2e7d32"/>
+                    <!-- Roof -->
+                    <rect x="10" y="6" width="9" height="1.2" fill="#fff"/>
+                    <!-- Lateral Bars -->
+                    <rect x="10" y="7" width="0.8" height="5" fill="#fff"/>
+                    <rect x="18.2" y="7" width="0.8" height="5" fill="#fff"/>
+                    <!-- Seat -->
+                    <rect x="11" y="10" width="7" height="1.2" rx="0.3" fill="#fff"/>
                 </svg>
             `),
             iconSize: [size, size],
@@ -124,16 +134,35 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 28 28">
                     <defs>
                         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.3"/>
+                        <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.3"/>
                         </filter>
                     </defs>
-                    <circle cx="14" cy="14" r="12" fill="#ff1493" filter="url(#shadow)"/>
-                    <rect x="7.5" y="8" width="13" height="10" rx="2" ry="2" fill="#fff"/>
-                    <rect x="9" y="9.5" width="10" height="4" rx="1" ry="1" fill="#ff80bf"/>
-                    <rect x="9" y="14.5" width="10" height="2.5" rx="1" ry="1" fill="#ffd1e6"/>
-                    <circle cx="11" cy="20" r="1.3" fill="#fff"/>
-                    <circle cx="17" cy="20" r="1.3" fill="#fff"/>
-                </svg>
+
+                    <!-- Background Rectangle -->
+                    <rect x="3" y="3" width="22" height="22" rx="4" ry="4" fill="#c30505ff" filter="url(#shadow)"/>
+
+                    <!-- Side Mirrors -->
+                    <rect x="7.5" y="9" width="1" height="2" rx="0.3" fill="#000"/>
+                    <rect x="19.5" y="9" width="1" height="2" rx="0.3" fill="#000"/>
+
+                    <!-- Body -->
+                    <rect x="9" y="7" width="10" height="10" rx="2" ry="2" fill="#fff"/>
+
+                    <!-- Windshield -->
+                    <rect x="10.5" y="8.5" width="7" height="4" rx="1" ry="1" fill="#bcbcbcff"/>
+
+                    <!-- Central Stripe -->
+                    <rect x="10.5" y="13.5" width="7" height="2" fill="#949494ff"/>
+
+                    <!-- Headlights -->
+                    <circle cx="11.5" cy="16.5" r="0.9" fill="#fff"/>
+                    <circle cx="16.5" cy="16.5" r="0.9" fill="#fff"/>
+
+                    <!-- Black Wheels -->
+                    <rect x="9.5" y="17.8" width="2" height="2" rx="0.5" fill="#000"/>
+                    <rect x="16.5" y="17.8" width="2" height="2" rx="0.5" fill="#000"/>
+                    </svg>
+
             `),
             iconSize: [size, size],
             iconAnchor: [size / 2, size * 0.9],
@@ -227,7 +256,8 @@
 
     // Update icon sizes when zoom changes
     map.on('zoomend', () => {
-        const size = iconSizeForZoom(map.getZoom());
+        let size = iconSizeForZoom(map.getZoom());
+        size = Math.min(size, 42);
         log('EVENT', `zoomend -> size=${size}`);
         currentBusStopIcon = makeBusStopIcon(size);
         currentBusIcon = makeBusIcon(size);
