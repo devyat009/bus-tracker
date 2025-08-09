@@ -5,7 +5,6 @@ import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-na
 import OpenStreetMap from "../components/OpenStreetMap";
 
 export default function Index() {
-  console.log('Index component rendered with OpenStreetMap');
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(true);
 
@@ -34,6 +33,15 @@ export default function Index() {
         setLocating(false);
         return;
       }
+      try {
+        // Get an initial fix immediately
+        const first = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        setLocation({ latitude: first.coords.latitude, longitude: first.coords.longitude });
+        setLocating(false);
+  } catch {
+        setLocating(false);
+      }
+      // Then start watching for updates
       subscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 5 },
         (loc) => {
@@ -41,8 +49,6 @@ export default function Index() {
             latitude: loc.coords.latitude,
             longitude: loc.coords.longitude,
           });
-          // hide only while first fix is pending; subsequent watch updates should keep marker visible
-          setLocating(false);
         }
       );
     })();
@@ -74,7 +80,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#ffffffff',
   },
   header: {
     padding: 15,

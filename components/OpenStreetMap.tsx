@@ -153,6 +153,16 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
         javaScriptEnabled
         domStorageEnabled
         scrollEnabled={false}
+        onLoadEnd={() => {
+          if (!webviewRef.current) return;
+          const js = `
+            if (window.setUserMarkerVisible) { window.setUserMarkerVisible(${showUserMarker ? 'true' : 'false'}); }
+            ${typeof latitude === 'number' && typeof longitude === 'number' ? `if (window.setUserPosition) { window.setUserPosition(${latitude}, ${longitude}, ${zoom}); }` : ''}
+            true;
+          `;
+          // @ts-ignore
+          webviewRef.current.injectJavaScript(js);
+        }}
       />
     </View>
   );
