@@ -111,8 +111,8 @@ const OpenStreetMap = forwardRef<OpenStreetMapHandle, OpenStreetMapProps>(({
         }
         .pulse-inner {
           position: absolute;
-          top: 6px; /* center 12px inside 24px */
-          left: 6px;
+          top: 4px;
+          left: 4px;
           width: 12px;
           height: 12px;
           background: #2196f3;
