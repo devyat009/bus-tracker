@@ -51,6 +51,16 @@ Isso cria e instala um build de desenvolvimento no emulador/dispositivo conectad
 
 Observação (iOS): `npx expo run:ios` requer macOS com Xcode.
 
+ou
+```bash
+npx expo eject
+```
+```bash
+cd android
+./gradlew assembleRelease
+```
+apk location
+bus-tracker\android\app\build\outputs\apk\release
 
 
 ## Licença
