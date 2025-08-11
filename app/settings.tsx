@@ -1,13 +1,17 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import DeveloperOptions from '../components/SettingsComponent/DeveloperOptions';
 
 const Settings = () => {
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Configurações do aplicativo</Text>
-      </View>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Settings</Text>
+          <Text style={styles.subtitle}>Configurações do aplicativo</Text>
+          <DeveloperOptions />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -17,11 +21,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   title: {
     fontSize: 24,
