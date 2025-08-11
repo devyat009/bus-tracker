@@ -1,5 +1,6 @@
-import { StyleSheet, View } from "react-native";
+import { StatusBar } from 'expo-status-bar';
 import React, { useState } from "react";
+import { StyleSheet, View } from "react-native";
 import BottomNavbar from "../components/BottomNavbar";
 import Index from "./index";
 import Settings from "./settings";
@@ -18,6 +19,7 @@ const RootLayout = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="dark" hidden={false} translucent={false} />
       <View style={styles.content}>
         {renderActiveScreen()}
       </View>

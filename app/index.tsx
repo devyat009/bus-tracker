@@ -95,6 +95,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e0e0e0',
   },
   title: {
+    marginTop: 25,
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',

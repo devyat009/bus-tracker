@@ -1,5 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LayoutAnimation, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
 
 type UrlKey = 'buses' | 'stops' | 'lines';
 interface UrlItem {
@@ -25,10 +26,38 @@ const URLS: UrlItem[] = [
   },
 ];
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const DeveloperOptions = () => {
+  const [expanded, setExpanded] = useState(false);
   const [results, setResults] = useState<Partial<Record<UrlKey, 'success' | 'error' | 'loading'>>>({});
   const [logs, setLogs] = useState<Partial<Record<UrlKey, string>>>({});
-  const [previewRoutes, setPreviewRoutes] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<Partial<Record<UrlKey, any>>>({});
+  const [showPreview, setShowPreview] = useState<{ key: UrlKey | null, visible: boolean }>({ key: null, visible: false });
+
+  const toggleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => !prev);
+  };
+
+  const fetchAndPreview = async (key: UrlKey, url: string) => {
+    setResults(r => ({ ...r, [key]: 'loading' }));
+    setLogs(l => ({ ...l, [key]: '' }));
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const geojson = await res.json();
+      setResults(r => ({ ...r, [key]: 'success' }));
+      setLogs(l => ({ ...l, [key]: JSON.stringify(geojson).slice(0, 500) }));
+      setPreviewData(d => ({ ...d, [key]: geojson }));
+    } catch (e) {
+      setResults(r => ({ ...r, [key]: 'error' }));
+      setLogs(l => ({ ...l, [key]: String(e) }));
+      setPreviewData(d => ({ ...d, [key]: null }));
+    }
+  };
 
   const checkUrl = async (key: UrlKey, url: string) => {
     setResults(r => ({ ...r, [key]: 'loading' }));
@@ -45,55 +74,85 @@ const DeveloperOptions = () => {
     }
   };
 
-  const handlePreviewRoutes = async () => {
-    setResults(r => ({ ...r, lines: 'loading' }));
-    setLogs(l => ({ ...l, lines: '' }));
-    try {
-      const urlObj = URLS.find(u => u.key === 'lines');
-      if (!urlObj) throw new Error('URL não encontrada');
-      const res = await fetch(urlObj.url);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const geojson = await res.json();
-      setResults(r => ({ ...r, lines: 'success' }));
-      setLogs(l => ({ ...l, lines: JSON.stringify(geojson).slice(0, 500) }));
-      setPreviewRoutes(geojson);
-    } catch (e) {
-      setResults(r => ({ ...r, lines: 'error' }));
-      setLogs(l => ({ ...l, lines: String(e) }));
-      setPreviewRoutes(null);
+  const getPreviewTitle = (key: UrlKey | null) => {
+    switch (key) {
+      case 'buses': return 'Preview dos Ônibus';
+      case 'stops': return 'Preview das Paradas';
+      case 'lines': return 'Preview das Rotas';
+      default: return 'Preview';
     }
   };
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Opções de Desenvolvedor</Text>
-      <ScrollView>
-        {URLS.map(({ key, label, url }) => (
-          <View key={key} style={styles.row}>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => key === 'lines' ? handlePreviewRoutes() : checkUrl(key, url)}
-            >
-              <Text style={styles.buttonText}>{label}</Text>
-            </TouchableOpacity>
-            <Text style={{ color: results[key] === 'success' ? 'green' : results[key] === 'error' ? 'red' : '#888', marginLeft: 8 }}>
-              {results[key] === 'success' && 'OK'}
-              {results[key] === 'error' && 'Erro'}
-              {results[key] === 'loading' && '...'}
-            </Text>
-            {results[key] === 'error' && (
-              <TouchableOpacity onPress={() => alert(logs[key])}>
-                <Text style={styles.logLink}>Ver log</Text>
+      <TouchableOpacity style={styles.headerRow} onPress={toggleExpand} activeOpacity={0.7}>
+        <Text style={styles.sectionTitle}>Opções de Desenvolvedor</Text>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={24}
+          color="#333"
+          style={styles.chevron}
+        />
+      </TouchableOpacity>
+      {expanded && (
+        <ScrollView>
+          {URLS.map(({ key, label, url }) => (
+            <View key={key} style={styles.row}>
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() => fetchAndPreview(key, url)}
+              >
+                <Text style={styles.buttonText}>{label}</Text>
               </TouchableOpacity>
-            )}
-            {key === 'lines' && results[key] === 'success' && previewRoutes && (
-              <TouchableOpacity onPress={() => alert('Preview de rotas não implementado no mobile.')}>
-                <Text style={styles.logLink}>Preview</Text>
-              </TouchableOpacity>
-            )}
+              <Text style={{ color: results[key] === 'success' ? 'green' : results[key] === 'error' ? 'red' : '#888', marginLeft: 8 }}>
+                {results[key] === 'success' && 'OK'}
+                {results[key] === 'error' && 'Erro'}
+                {results[key] === 'loading' && '...'}
+              </Text>
+              {results[key] === 'error' && (
+                <TouchableOpacity onPress={() => alert(logs[key])}>
+                  <Text style={styles.logLink}>Ver log</Text>
+                </TouchableOpacity>
+              )}
+              {results[key] === 'success' && previewData[key] && (
+                <TouchableOpacity onPress={() => setShowPreview({ key, visible: true })}>
+                  <Text style={styles.logLink}>Preview</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Modal de preview */}
+      <Modal
+        visible={showPreview.visible && !!showPreview.key}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPreview({ key: null, visible: false })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{getPreviewTitle(showPreview.key)}</Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {previewData[showPreview.key as UrlKey]?.features?.slice(0, 10).map((feature: any, idx: number) => (
+                <View key={idx} style={styles.featureBox}>
+                  <Text style={styles.featureTitle}>{`${getPreviewTitle(showPreview.key).replace('Preview ', '')} #${idx + 1}`}</Text>
+                  <Text style={styles.featureText}>
+                    {JSON.stringify(feature.properties, null, 2)}
+                  </Text>
+                </View>
+              ))}
+              {!previewData[showPreview.key as UrlKey]?.features?.length && (
+                <Text style={styles.featureText}>Nenhum dado encontrado.</Text>
+              )}
+            </ScrollView>
+            <Pressable style={styles.closeButton} onPress={() => setShowPreview({ key: null, visible: false })}>
+              <Text style={styles.closeButtonText}>Fechar</Text>
+            </Pressable>
           </View>
-        ))}
-      </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -105,10 +164,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7f7f7',
     borderRadius: 10,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 12,
+  },
+  chevron: {
+    marginLeft: 8,
   },
   row: {
     flexDirection: 'row',
@@ -129,6 +196,53 @@ const styles = StyleSheet.create({
     color: '#c30505',
     marginLeft: 10,
     textDecorationLine: 'underline',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  featureBox: {
+    marginBottom: 14,
+    backgroundColor: '#f3f3f3',
+    borderRadius: 8,
+    padding: 8,
+  },
+  featureTitle: {
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  featureText: {
+    fontSize: 13,
+    color: '#222',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  closeButton: {
+    marginTop: 16,
+    alignSelf: 'center',
+    backgroundColor: '#1f6feb',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 
