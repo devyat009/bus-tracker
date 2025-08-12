@@ -186,6 +186,7 @@
   </div>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
   <script>
 
     const INITIAL_LAT = 15.7801; // Latitude for initial map center
@@ -591,10 +592,6 @@
           tarifaLine +
           '</div>';
         layer.bindPopup(html);
-        layer.on('popupopen', function () {
-          var codeRaw = (p.cd_linha || p.linha || p.servico || '').toString().trim();
-          if (codeRaw) { window.setBusRoute(codeRaw); }
-        });
       }
     }).addTo(map);
     var stopsCluster = null, busesCluster = null;
@@ -813,41 +810,97 @@
         .finally(function () { setLoading(false); });
     }
 
-    // Draw route by line code (use cached dataset; keep zoom/center)
-    function setBusRoute(codeRaw) {
-  if (!codeRaw) return;
-  rnLog('ROUTE', 'setBusRoute start', { code: String(codeRaw) });
-  ensureLinesDataset()
-    .then(function (geojson) {
-      var feats = (geojson && geojson.features) || [];
-      var target = String(codeRaw).toUpperCase().trim();
-      var digits = target.replace(/[^0-9]/g, '').replace(/^0+/, '');
-      var filtered = feats.filter(function (f) {
-        var pr = (f && f.properties) || {};
-        var cands = [pr.cd_linha, pr.linha, pr.servico, pr.cd_linha_principal, pr.codigo, pr.cod_linha]
-          .map(function (v) { var s = (v == null ? '' : String(v)).toUpperCase().trim(); return { raw: s, digits: s.replace(/[^0-9]/g, '').replace(/^0+/, '') }; })
-          .filter(function (c) { return !!c.raw; });
-        for (var i = 0; i < cands.length; i++) {
-          if (cands[i].raw === target || (cands[i].digits && cands[i].digits === digits)) return true;
+    // Converting UTM to LatLng
+    proj4.defs("EPSG:32723","+proj=utm +zone=23 +south +datum=WGS84 +units=m +no_defs");
+
+    function convertGeojsonUTMtoLatLng(geojson) {
+      geojson.features.forEach(function(f) {
+        if (f.geometry.type === "LineString") {
+          f.geometry.coordinates = f.geometry.coordinates.map(function(coord) {
+            // UTM for [lng, lat]
+            return proj4("EPSG:32723", "EPSG:4326", coord);
+          });
         }
-        return false;
+        
+        if (f.geometry.type === "MultiLineString") {
+          f.geometry.coordinates = f.geometry.coordinates.map(function(line) {
+            return line.map(function(coord) {
+              return proj4("EPSG:32723", "EPSG:4326", coord);
+            });
+          });
+        }
       });
+      return geojson;
+    }
 
-      if (!filtered.length) {
-        ensureLinesDataset(true).then(function (geojson2) {
-          var feats2 = (geojson2 && geojson2.features) || [];
-          var filtered2 = feats2.filter();
-          routeLayer.clearLayers();
-          routeLayer.addData({ type: 'FeatureCollection', features: filtered2 });
-        });
-        return;
+    function needsConversion(coords) {
+      // if longitude is greater than 180 or less than -180
+      return Math.abs(coords[0]) > 180 || Math.abs(coords[1]) > 90;
+    }
+
+    // Draw route by line code (use cached dataset; keep zoom/center)
+    async function setBusRoute(codeRaw, autoFitRoute = true) {
+      try {
+        if (!codeRaw) return;
+        rnLog('ROUTE', 'setBusRoute start', { code: String(codeRaw) });
+        let ds = await ensureLinesDataset();
+        if (!ds || !Array.isArray(ds.features)) return;
+        routeLayer.clearLayers();
+
+        // compare line code
+        function matchLineCode(props, code) {
+          const target = String(code).toUpperCase().trim();
+          const digits = target.replace(/[^0-9]/g, '').replace(/^0+/, '');
+          const cands = [props.cd_linha, props.linha, props.servico, props.cd_linha_principal, props.codigo, props.cod_linha]
+            .map(v => (v == null ? '' : String(v)).toUpperCase().trim())
+            .filter(Boolean);
+          return cands.some(raw => raw === target || (raw.replace(/[^0-9]/g, '').replace(/^0+/, '') === digits));
+        }
+
+        // filter features
+        let feats = ds.features.filter(f => matchLineCode(f.properties || {}, codeRaw));
+
+        // if not fount try again
+        if (!feats.length) {
+          rnLog('ROUTE', `no features for code ${codeRaw}, forcing refresh`);
+          ds = await ensureLinesDataset(true);
+          feats = ds?.features?.filter(f => matchLineCode(f.properties || {}, codeRaw)) || [];
+          if (!feats.length) {
+            rnLog('ROUTE', `still no features after refresh for code ${codeRaw}`);
+            showToast('Linha não encontrada');
+            return;
+          }
+        }
+
+        const gj = { type: 'FeatureCollection', features: feats };
+        if (gj.features.length && needsConversion(gj.features[0].geometry.coordinates[0])) {
+          convertGeojsonUTMtoLatLng(gj);
+        }
+        routeLayer.addData(gj);
+
+        // centrilize the route
+        if (autoFitRoute) {
+          try {
+            const b = routeLayer.getBounds();
+            if (b && b.isValid()) {
+              map.fitBounds(b.pad(0.25));
+              // max zoom for fitBounds
+              const maxAllowedZoom = 9; // zoom for when seeing the route
+              setTimeout(function () {
+                if (map.getZoom() < maxAllowedZoom) {
+                  map.setZoom(maxAllowedZoom);
+                }
+              }, 400); // awaits fitbounds to animate zoom
+            }
+          } catch {}
+        }
+
+        rnLog('ROUTE', `drawn route for ${codeRaw} (features=${feats.length})`);
+      } catch (e) {
+        rnLog('ROUTE', 'error', String(e && e.message || e));
+        showToast('Erro ao desenhar rota');
       }
-
-      routeLayer.clearLayers();
-      routeLayer.addData({ type: 'FeatureCollection', features: filtered });
-    })
-    .catch(function (e) { rnLog('ROUTE', 'error', String(e && e.message || e)); });
-}
+    }
     window.setBusRoute = setBusRoute;
 
     // UI bindings
