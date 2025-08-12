@@ -315,11 +315,13 @@
       var list = document.getElementById('autocompleteList');
       if (!list) return;
       list.innerHTML = '';
-      if (!val) return;
-      var norm = val.toUpperCase().trim();
-      var filtered = allLinesList.filter(function (l) {
-        return l.label.indexOf(norm) !== -1 || l.value.indexOf(norm) !== -1;
-      }).slice(0, 10);
+      var norm = (val || '').toUpperCase().trim();
+      // if dont have any value, show all buses lines
+      var filtered = !norm
+        ? allLinesList.slice(0, 100) // up to 100 to not lag
+        : allLinesList.filter(function (l) {
+            return l.label.indexOf(norm) !== -1 || l.value.indexOf(norm) !== -1;
+          }).slice(0, 100);
       filtered.forEach(function (line) {
         var item = document.createElement('div');
         item.textContent = line.label;
@@ -335,6 +337,13 @@
         };
         list.appendChild(item);
       });
+      list.style.maxHeight = '200px';
+      list.style.overflowY = 'auto';
+      list.style.position = 'absolute';
+      list.style.width = '91%';
+      list.style.zIndex = 1001;
+      list.style.bottom = 'auto';
+      list.style.marginTop = '40px';
     }
 
     // Custom pulsating marker
@@ -479,15 +488,50 @@
     // =========================
     function makeStopIcon(size) {
       return L.icon({
-        iconUrl: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 28 28"><rect x="5" y="3" width="18" height="14" rx="3" ry="3" fill="#32cd32"/><path d="M9 17 L19 17 L14 23 Z" fill="#32cd32"/></svg>'),
+        iconUrl: 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 28 28">
+            <defs>
+              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.3"/>
+              </filter>
+            </defs>
+            <rect x="5" y="3" width="18" height="14" rx="3" ry="3" fill="#32cd32" filter="url(#shadow)"/>
+            <path d="M9 17 L19 17 L14 23 Z" fill="#32cd32" filter="url(#shadow)"/>
+            <rect x="7.5" y="7" width="1" height="5" fill="#fff"/>
+            <rect x="6.5" y="5" width="3" height="2" rx="0.5" ry="0.5" fill="#2e7d32"/>
+            <rect x="10" y="6" width="9" height="1.2" fill="#fff"/>
+            <rect x="10" y="7" width="0.8" height="5" fill="#fff"/>
+            <rect x="18.2" y="7" width="0.8" height="5" fill="#fff"/>
+            <rect x="11" y="10" width="7" height="1.2" rx="0.3" fill="#fff"/>
+          </svg>
+        `),
         iconSize: [size, size],
         iconAnchor: [size / 2, size * 0.9],
         popupAnchor: [0, -size * 0.7]
       });
     }
+
     function makeBusIcon(size) {
       return L.icon({
-        iconUrl: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 28 28"><rect x="3" y="3" width="22" height="22" rx="4" ry="4" fill="#c30505"/><rect x="9" y="7" width="10" height="10" rx="2" ry="2" fill="#fff"/></svg>'),
+        iconUrl: 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 28 28">
+            <defs>
+              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.3"/>
+              </filter>
+            </defs>
+            <rect x="3" y="3" width="22" height="22" rx="4" ry="4" fill="#c30505ff" filter="url(#shadow)"/>
+            <rect x="7.5" y="9" width="1" height="2" rx="0.3" fill="#000"/>
+            <rect x="19.5" y="9" width="1" height="2" rx="0.3" fill="#000"/>
+            <rect x="9" y="7" width="10" height="10" rx="2" ry="2" fill="#fff"/>
+            <rect x="10.5" y="8.5" width="7" height="4" rx="1" ry="1" fill="#bcbcbcff"/>
+            <rect x="10.5" y="13.5" width="7" height="2" fill="#949494ff"/>
+            <circle cx="11.5" cy="16.5" r="0.9" fill="#fff"/>
+            <circle cx="16.5" cy="16.5" r="0.9" fill="#fff"/>
+            <rect x="9.5" y="17.8" width="2" height="2" rx="0.5" fill="#000"/>
+            <rect x="16.5" y="17.8" width="2" height="2" rx="0.5" fill="#000"/>
+          </svg>
+        `),
         iconSize: [size, size],
         iconAnchor: [size / 2, size * 0.9],
         popupAnchor: [0, -size * 0.7]
@@ -570,7 +614,7 @@
             if (zoom >= 18) return 1; // effectively no clustering at very high zoom
             if (zoom >= 17) return 20;
             if (zoom >= 16) return 40;
-            return 60;
+            return 80;
           }
         });
         created = true;
@@ -587,7 +631,7 @@
             if (zoom >= 18) return 1;
             if (zoom >= 17) return 20;
             if (zoom >= 16) return 10;
-            return 1;
+            return 60;
           }
         });
         created = true;
@@ -753,17 +797,16 @@
             }
             var filteredGeo = { type: 'FeatureCollection', features: feats };
             busesLayer.clearLayers();
-    busesLayer.addData(filteredGeo);
+              busesLayer.addData(filteredGeo);
 
-    if (clusterEnabled) {
-      rebuildBusesCluster();
-      // Garante que só o cluster está no mapa
-      if (!map.hasLayer(busesCluster)) busesCluster.addTo(map);
-      if (map.hasLayer(busesLayer)) map.removeLayer(busesLayer);
-    } else {
-      if (!map.hasLayer(busesLayer)) busesLayer.addTo(map);
-      if (map.hasLayer(busesCluster)) map.removeLayer(busesCluster);
-    }
+              if (clusterEnabled) {
+                rebuildBusesCluster();
+                if (!map.hasLayer(busesCluster)) busesCluster.addTo(map);
+                if (map.hasLayer(busesLayer)) map.removeLayer(busesLayer);
+              } else {
+                if (!map.hasLayer(busesLayer)) busesLayer.addTo(map);
+                if (map.hasLayer(busesCluster)) map.removeLayer(busesCluster);
+              }
           } catch (e) { rnLog('BUSES', 'layer_error', String(e && e.message || e)); }
         })
         .catch(function (e) { rnLog('BUSES', 'error', String(e && e.message || e)); showToast('Erro ao carregar ônibus'); })
@@ -819,7 +862,17 @@
       if (chkOnlyActive) { chkOnlyActive.addEventListener('change', function () { showOnlyActiveBuses = !!chkOnlyActive.checked; refreshBuses(); }); }
       function applySearch() { refreshBuses(); if (selectedLines.length > 0) { try { window.setBusRoute(selectedLines[0].value); } catch (e) { } } }
       btnSearch.addEventListener('click', applySearch);
-      txtLine.addEventListener('input', function (ev) { updateAutocompleteList(ev.target.value); });
+      txtLine.addEventListener('focus', function (ev) {
+        updateAutocompleteList('');
+      });
+      txtLine.addEventListener('input', function (ev) {
+        updateAutocompleteList(ev.target.value);
+      });
+      txtLine.addEventListener('blur', function () {
+        setTimeout(function () {
+          document.getElementById('autocompleteList').innerHTML = '';
+        }, 200);
+      });
       txtLine.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { applySearch(); } });
       renderSelectedLines();
       // populateLinesFromBuses removido: agora é feito em refreshBuses
