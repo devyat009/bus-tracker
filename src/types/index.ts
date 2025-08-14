@@ -53,8 +53,6 @@ export interface MapState {
 
 export type MapStyle = 
   | 'osm' 
-  | 'maptiler_streets' 
-  | 'maptiler_dark' 
   | 'stadia_dark' 
   | 'stadia_bright';
 

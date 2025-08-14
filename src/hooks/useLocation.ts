@@ -76,7 +76,7 @@ export const useLocation = () => {
         {
           accuracy: Location.Accuracy.Balanced,
           timeInterval: 10000, // Update every 10 seconds
-          distanceInterval: 50, // Update every 50 meters
+          distanceInterval: 5, // Update every 5 meters
         },
         (location) => {
           const userLoc: UserLocation = {

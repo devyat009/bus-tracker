@@ -6,15 +6,15 @@ export const config: AppConfig = {
   api: {
     baseUrl: 'http://geoserver.semob.df.gov.br/geoserver/semob/ows',
     endpoints: {
-      buses: 'service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3A%C3%9Altima%20posi%C3%A7%C3%A3o%20da%20frota&outputFormat=application%2Fjson',
-      stops: 'service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AParadas%20de%20onibus&outputFormat=application%2Fjson',
-      lines: 'service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3ALinhas%20de%20onibus&outputFormat=application%2Fjson',
+      buses: 'service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3A%C3%9Altima%20posi%C3%A7%C3%A3o%20da%20frota&outputFormat=application%2Fjson&maxFeatures=500',
+      stops: 'service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3AParadas%20de%20onibus&outputFormat=application%2Fjson&maxFeatures=200',
+      lines: 'service=WFS&version=1.0.0&request=GetFeature&typeName=semob%3ALinhas%20de%20onibus&outputFormat=application%2Fjson&maxFeatures=100',
     },
   },
   map: {
     initialPosition: {
-      latitude: -15.7801,
-      longitude: -47.9292,
+      latitude: -15.793782954386705,
+      longitude: -47.882705972050054,
       zoom: 15,
     },
     styles: {
@@ -22,16 +22,6 @@ export const config: AppConfig = {
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19,
-      },
-      maptiler_streets: {
-        url: 'https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=Get_your_own_D6rA4zTHduk6KOKTXn6r',
-        attribution: '© MapTiler © OpenStreetMap contributors',
-        maxZoom: 20,
-      },
-      maptiler_dark: {
-        url: 'https://api.maptiler.com/maps/darkmatter/{z}/{x}/{y}.png?key=Get_your_own_D6rA4zTHduk6KOKTXn6r',
-        attribution: '© MapTiler © OpenStreetMap contributors',
-        maxZoom: 20,
       },
       stadia_dark: {
         url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',

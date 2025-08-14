@@ -59,8 +59,8 @@ interface AppState extends MapState {
 const initialState = {
   // Map state
   center: {
-    latitude: -15.7801,
-    longitude: -47.9292,
+    latitude: -15.793782954386705,
+    longitude: -47.882705972050054,
   },
   zoom: 15,
   style: 'osm' as MapStyle,
