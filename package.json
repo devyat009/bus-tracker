@@ -6,9 +6,22 @@
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
+    "android:dev": "cross-env NODE_ENV=development expo run:android",
+    "android:release": "expo run:android --variant release",
     "ios": "expo run:ios",
+    "ios:dev": "cross-env NODE_ENV=development expo run:ios",
+    "ios:release": "expo run:ios --configuration Release",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "lint:check": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "type-check": "tsc --noEmit",
+    "clean": "expo r -c && rm -rf node_modules && npm install",
+    "prebuild": "expo prebuild --clean",
+    "build:android": "npm run prebuild && cd android && ./gradlew assembleRelease",
+    "build:android:dev": "cross-env NODE_ENV=development npm run prebuild && cd android && ./gradlew assembleDebug",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -40,11 +53,13 @@
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
     "react-native-web": "~0.20.0",
-    "react-native-webview": "13.13.5"
+    "react-native-webview": "13.13.5",
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "cross-env": "^10.0.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"

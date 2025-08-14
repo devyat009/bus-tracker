@@ -27,7 +27,7 @@ npm install
 2) Iniciar em modo desenvolvimento
 
 ```bash
-npx expo start
+npm run android:dev
 ```
 
 Abra no:
