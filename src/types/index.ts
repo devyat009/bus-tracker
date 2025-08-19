@@ -88,6 +88,7 @@ export interface BusApiProperties {
 }
 
 export interface StopApiProperties {
+  parada?: string;
   cd_parada?: string;
   codigo?: string;
   id?: string;
@@ -96,6 +97,9 @@ export interface StopApiProperties {
   nm_parada?: string;
   nome?: string;
   ds_descricao?: string;
+  situacao?: string;
+  estrutura_de_paragem?: string;
+  tipo?: string;
 }
 
 export interface LineApiProperties {

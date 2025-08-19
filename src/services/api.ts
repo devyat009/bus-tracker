@@ -77,8 +77,15 @@ class ApiService {
   }
 
   async getStops(bounds?: MapBounds): Promise<BusStop[]> {
+    let endpoint = appConfig.api.endpoints.stops;
+    
+    // Force EPSG:4326 output for stops
+    if (!endpoint.includes('srsName=')) {
+      endpoint += '&srsName=EPSG:4326';
+    }
+    
     const response = await this.makeRequest<StopApiProperties>(
-      appConfig.api.endpoints.stops,
+      endpoint,
       bounds
     );
 
@@ -131,9 +138,24 @@ class ApiService {
       return null;
     }
 
-    const [longitude, latitude] = geometry.coordinates as [number, number];
+    let [longitude, latitude] = geometry.coordinates as [number, number];
     
-    const codigo = properties.cd_parada || properties.codigo || properties.id || '';
+    // Check if coordinates are in UTM format (large numbers typically > 180)
+    if (Math.abs(longitude) > 180 || Math.abs(latitude) > 90) {
+      // UTM coordinates detected, convert to lat/lng
+      // EPSG:31983 (UTM Zone 23S) to EPSG:4326 conversion for Brasília region
+      const converted = this.convertUtmToLatLng(longitude, latitude);
+      longitude = converted.longitude;
+      latitude = converted.latitude;
+    }
+    
+    // Skip invalid coordinates (outside of Brazil bounds)
+    if (latitude < -35 || latitude > 5 || longitude < -75 || longitude > -30) {
+      console.log('Invalid coordinates for stop, skipping:', { latitude, longitude, properties });
+      return null;
+    }
+    
+    const codigo = properties.parada || properties.cd_parada || properties.codigo || properties.id || '';
     const nome = properties.descricao || properties.ds_ponto || properties.nm_parada || properties.nome || properties.ds_descricao || 'Parada de ônibus';
 
     return {
@@ -143,6 +165,60 @@ class ApiService {
       descricao: nome,
       latitude,
       longitude,
+    };
+  }
+
+  private convertUtmToLatLng(utmX: number, utmY: number): { latitude: number; longitude: number } {
+    // UTM Zone 23S parameters for Central Brazil (Brasília region)
+    const zone = 23;
+    const hemisphere = 'S';
+    const a = 6378137.0; // WGS84 semi-major axis
+    const e = 0.0818191908426; // WGS84 eccentricity
+    const e1sq = 0.00673949674228; // e1 squared
+    const k0 = 0.9996; // UTM scale factor
+    const falseEasting = 500000.0;
+    const falseNorthing = hemisphere === 'S' ? 10000000.0 : 0.0;
+
+    // Central meridian for UTM zone 23: -45 degrees
+    const centralMeridian = (zone - 1) * 6 - 180 + 3; // -45 degrees
+
+    const x = utmX - falseEasting;
+    const y = utmY - falseNorthing;
+
+    const M = y / k0;
+    const mu = M / (a * (1 - Math.pow(e, 2) / 4 - 3 * Math.pow(e, 4) / 64 - 5 * Math.pow(e, 6) / 256));
+
+    const e1 = (1 - Math.sqrt(1 - Math.pow(e, 2))) / (1 + Math.sqrt(1 - Math.pow(e, 2)));
+    const J1 = 3 * e1 / 2 - 27 * Math.pow(e1, 3) / 32;
+    const J2 = 21 * Math.pow(e1, 2) / 16 - 55 * Math.pow(e1, 4) / 32;
+    const J3 = 151 * Math.pow(e1, 3) / 96;
+    const J4 = 1097 * Math.pow(e1, 4) / 512;
+
+    const fp = mu + J1 * Math.sin(2 * mu) + J2 * Math.sin(4 * mu) + J3 * Math.sin(6 * mu) + J4 * Math.sin(8 * mu);
+
+    const e2 = Math.sqrt(1 - Math.pow(e, 2));
+    const C1 = Math.pow(e2, 2) / Math.pow(Math.cos(fp), 2);
+    const T1 = Math.pow(Math.tan(fp), 2);
+    const R1 = a * (1 - Math.pow(e, 2)) / Math.pow(1 - Math.pow(e, 2) * Math.pow(Math.sin(fp), 2), 1.5);
+    const N1 = a / Math.sqrt(1 - Math.pow(e, 2) * Math.pow(Math.sin(fp), 2));
+    const D = x / (N1 * k0);
+
+    const Q1 = N1 * Math.tan(fp) / R1;
+    const Q2 = Math.pow(D, 2) / 2;
+    const Q3 = (5 + 3 * T1 + 10 * C1 - 4 * Math.pow(C1, 2) - 9 * e1sq) * Math.pow(D, 4) / 24;
+    const Q4 = (61 + 90 * T1 + 298 * C1 + 45 * Math.pow(T1, 2) - 1.6 * e1sq - 37 * e1sq * C1) * Math.pow(D, 6) / 720;
+
+    const latitude = fp - Q1 * (Q2 - Q3 + Q4);
+
+    const Q5 = D;
+    const Q6 = (1 + 2 * T1 + C1) * Math.pow(D, 3) / 6;
+    const Q7 = (5 - 2 * C1 + 28 * T1 - 3 * Math.pow(C1, 2) + 8 * e1sq + 24 * Math.pow(T1, 2)) * Math.pow(D, 5) / 120;
+
+    const longitude = centralMeridian + (Q5 - Q6 + Q7) / Math.cos(fp);
+
+    return {
+      latitude: latitude * 180 / Math.PI,
+      longitude: longitude * 180 / Math.PI
     };
   }
 

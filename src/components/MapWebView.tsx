@@ -133,19 +133,30 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       fetchBuses();
     }
 
+    const dataToSend = {
+      buses,
+      stops,
+      lines,
+      userLocation,
+      mapStyle,
+      showBuses,
+      showStops,
+      showOnlyActiveBuses,
+      selectedLines,
+    };
+
+    console.log('[MapWebView] Sending data to WebView:', {
+      busesCount: buses.length,
+      stopsCount: stops.length,
+      linesCount: lines.length,
+      showBuses,
+      showStops,
+      hasUserLocation: !!userLocation
+    });
+
     webViewRef.current.postMessage(JSON.stringify({
       type: 'updateData',
-      data: {
-        buses,
-        stops,
-        lines,
-        userLocation,
-        mapStyle,
-        showBuses,
-        showStops,
-        showOnlyActiveBuses,
-        selectedLines,
-      },
+      data: dataToSend,
     }));
   }, [buses, stops, lines, userLocation, mapStyle, showBuses, showStops, showOnlyActiveBuses, selectedLines, fetchBuses]);
 
@@ -293,6 +304,47 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       100% { transform: scale(2); opacity: 0; }
     }
 
+    /* Bus markers */
+    .bus-marker {
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid #FF6B35;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    .bus-marker.active {
+      border-color: #28A745;
+      background: rgba(40, 167, 69, 0.1);
+    }
+
+    .bus-marker:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Stop markers */
+    .stop-marker {
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid #007BFF;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    .stop-marker:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
     /* Loading overlay */
     #loading-overlay {
       position: absolute;
@@ -397,6 +449,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     
     // Initialize map
     function initMap() {
+      console.log('[WebView] Initializing map...');
       map = L.map('map').setView([-15.7942, -47.8822], 11);
       
       // Add tile layer
@@ -413,6 +466,8 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       map.addLayer(busesCluster);
       map.addLayer(stopsCluster);
       map.addLayer(routeLayer);
+      
+      console.log('[WebView] Clusters initialized');
       
       // Create user marker
       createUserMarker();
@@ -431,6 +486,8 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
         const zoom = map.getZoom();
         postMessage('zoomChanged', { zoom });
       });
+      
+      console.log('[WebView] Map initialization complete');
       
       // Notify React Native that map is ready
       postMessage('mapReady', { status: 'initialized' });
@@ -489,6 +546,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     }
     
     function updateMapData(data) {
+      console.log('[WebView] updateMapData called with:', data);
       // Update buses and stops without recentering
       const buses = data.buses || [];
       const stops = data.stops || [];
@@ -498,41 +556,83 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     }
     
     function renderBuses(buses, showBuses) {
+      console.log('[WebView] renderBuses called:', buses.length, 'buses, showBuses:', showBuses);
       busesCluster.clearLayers();
       
       if (!showBuses || !buses.length) {
+        console.log('[WebView] Skipping bus rendering');
         return;
       }
       
+      let renderedCount = 0;
       buses.forEach(bus => {
-        if (!bus.geometry || !bus.geometry.coordinates) return;
+        // Handle different bus data formats
+        let lat, lng, props = {};
         
-        const [lng, lat] = bus.geometry.coordinates;
-        const props = bus.properties || {};
+        if (bus.geometry && bus.geometry.coordinates) {
+          // GeoJSON format
+          [lng, lat] = bus.geometry.coordinates;
+          props = bus.properties || {};
+        } else if (bus.latitude && bus.longitude) {
+          // Direct format
+          lat = bus.latitude;
+          lng = bus.longitude;
+          props = bus;
+        } else {
+          console.log('[WebView] Skipping bus without coordinates:', bus);
+          return;
+        }
+        
+        const isActive = !!(props.linha || props.cd_linha || props.servico);
+        const linha = props.linha || props.cd_linha || props.servico || 'N/A';
         
         const busIcon = L.divIcon({
-          className: 'bus-marker',
+          className: 'bus-marker' + (isActive ? ' active' : ''),
           html: '🚌',
           iconSize: [24, 24],
           iconAnchor: [12, 12]
         });
         
         const marker = L.marker([lat, lng], { icon: busIcon });
+        
+        // Create popup
+        const popupContent = createBusPopup(props);
+        marker.bindPopup(popupContent);
+        
         busesCluster.addLayer(marker);
+        renderedCount++;
       });
+      
+      console.log('[WebView] Successfully rendered', renderedCount, 'buses');
     }
     
     function renderStops(stops, showStops) {
+      console.log('[WebView] renderStops called:', stops.length, 'stops, showStops:', showStops);
       stopsCluster.clearLayers();
       
       if (!showStops || !stops.length) {
+        console.log('[WebView] Skipping stops rendering');
         return;
       }
       
+      let renderedCount = 0;
       stops.forEach(stop => {
-        if (!stop.geometry || !stop.geometry.coordinates) return;
+        // Handle different stop data formats
+        let lat, lng, props = {};
         
-        const [lng, lat] = stop.geometry.coordinates;
+        if (stop.geometry && stop.geometry.coordinates) {
+          // GeoJSON format
+          [lng, lat] = stop.geometry.coordinates;
+          props = stop.properties || {};
+        } else if (stop.latitude && stop.longitude) {
+          // Direct format
+          lat = stop.latitude;
+          lng = stop.longitude;
+          props = stop;
+        } else {
+          console.log('[WebView] Skipping stop without coordinates:', stop);
+          return;
+        }
         
         const stopIcon = L.divIcon({
           className: 'stop-marker',
@@ -542,8 +642,52 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
         });
         
         const marker = L.marker([lat, lng], { icon: stopIcon });
+        
+        // Create popup
+        const popupContent = createStopPopup(props);
+        marker.bindPopup(popupContent);
+        
         stopsCluster.addLayer(marker);
+        renderedCount++;
       });
+      
+      console.log('[WebView] Successfully rendered', renderedCount, 'stops');
+    }
+    
+    function createBusPopup(props) {
+      const linha = props.linha || props.cd_linha || props.servico || 'N/A';
+      const veiculo = props.prefixo || props.veiculo || props.cd_veiculo || 'N/A';
+      const velocidade = props.velocidade || 'N/A';
+      const timestamp = props.timestamp || props.datalocal || props.data_hora || 'N/A';
+      
+      return \`
+        <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-width: 200px;">
+          <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">
+            🚌 Ônibus \${linha}
+          </h3>
+          <div style="font-size: 14px; line-height: 1.4;">
+            <p style="margin: 4px 0;"><strong>Veículo:</strong> \${veiculo}</p>
+            <p style="margin: 4px 0;"><strong>Velocidade:</strong> \${velocidade} km/h</p>
+            <p style="margin: 4px 0;"><strong>Última atualização:</strong> \${timestamp}</p>
+          </div>
+        </div>
+      \`;
+    }
+    
+    function createStopPopup(props) {
+      const nome = props.nome || props.descricao || props.ds_ponto || props.nm_parada || props.name || 'Parada de Ônibus';
+      const codigo = props.codigo || props.cd_parada || props.code || 'N/A';
+      
+      return \`
+        <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-width: 180px;">
+          <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">
+            🚏 \${nome}
+          </h3>
+          <div style="font-size: 14px; line-height: 1.4;">
+            <p style="margin: 4px 0;"><strong>Código:</strong> \${codigo}</p>
+          </div>
+        </div>
+      \`;
     }
     
     function showLoading(text = 'Carregando...', progress = 0) {
@@ -591,12 +735,25 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     
     // Handle messages from React Native
     window.addEventListener('message', function(event) {
-      const message = JSON.parse(event.data);
+      console.log('[WebView] Received message:', event.data);
       
-      switch(message.type) {
-        case 'updateData':
-          updateMapData(message.data);
-          break;
+      try {
+        const message = JSON.parse(event.data);
+        console.log('[WebView] Parsed message:', message.type, message.data);
+        
+        switch(message.type) {
+          case 'updateData':
+            console.log('[WebView] Processing updateData with:', {
+              busesCount: message.data?.buses?.length || 0,
+              stopsCount: message.data?.stops?.length || 0,
+              showBuses: message.data?.showBuses,
+              showStops: message.data?.showStops
+            });
+            updateMapData(message.data);
+            break;
+        }
+      } catch (e) {
+        console.error('[WebView] Error parsing message:', e);
       }
     });
     
