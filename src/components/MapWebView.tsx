@@ -84,6 +84,8 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
   }, []);
 
   // Handle messages from WebView
+  const [webViewReady, setWebViewReady] = React.useState(false);
+  
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
@@ -94,6 +96,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
           break;
           
         case 'mapReady':
+          setWebViewReady(true);
           onMapReady?.();
           break;
           
@@ -128,7 +131,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
 
   // Send data to WebView when it changes
   useEffect(() => {
-    if (!webViewRef.current) return;
+    if (!webViewRef.current || !webViewReady) return;
     if (showBuses) {
       fetchBuses();
     }
@@ -158,7 +161,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       type: 'updateData',
       data: dataToSend,
     }));
-  }, [buses, stops, lines, userLocation, mapStyle, showBuses, showStops, showOnlyActiveBuses, selectedLines, fetchBuses]);
+  }, [webViewReady, buses, stops, lines, userLocation, mapStyle, showBuses, showStops, showOnlyActiveBuses, selectedLines, fetchBuses]);
 
   useImperativeHandle(ref, () => ({
     recenter: (lat: number, lng: number, zoomLevel?: number) => {
@@ -445,7 +448,11 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     let userMarkerVisible = false;
     let busesCluster;
     let stopsCluster;
+    let busesGeoLayer;
+    let stopsGeoLayer;
     let routeLayer;
+  // Queue to hold latest dataset while map/layers still initializing
+  let pendingDataQueue = null;
     
     // Initialize map
     function initMap() {
@@ -458,16 +465,71 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
         attribution: '© OpenStreetMap contributors'
       }).addTo(map);
       
-      // Create clusters
-      busesCluster = L.markerClusterGroup();
-      stopsCluster = L.markerClusterGroup();
+      // Create GeoJSON layers first (like the old map)
+      busesGeoLayer = L.geoJSON(null, {
+        pointToLayer: function(feature, latlng) {
+          const props = feature.properties || {};
+          const isActive = !!(props.cd_linha || props.linha || props.servico);
+          
+          const busIcon = L.divIcon({
+            className: 'bus-marker' + (isActive ? ' active' : ''),
+            html: '🚌',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          
+          const marker = L.marker(latlng, { icon: busIcon });
+          const popupContent = createBusPopup(props);
+          marker.bindPopup(popupContent);
+          
+          return marker;
+        }
+      });
+      
+      stopsGeoLayer = L.geoJSON(null, {
+        pointToLayer: function(feature, latlng) {
+          const props = feature.properties || {};
+          
+          const stopIcon = L.divIcon({
+            className: 'stop-marker',
+            html: '🚏',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          
+          const marker = L.marker(latlng, { icon: stopIcon });
+          const popupContent = createStopPopup(props);
+          marker.bindPopup(popupContent);
+          
+          return marker;
+        }
+      });
+      
+      // Attempt to create clusters; fallback if plugin missing
+      const clusterSupported = !!(window.L && L.markerClusterGroup);
       routeLayer = L.layerGroup();
-      
-      map.addLayer(busesCluster);
-      map.addLayer(stopsCluster);
       map.addLayer(routeLayer);
-      
-      console.log('[WebView] Clusters initialized');
+
+      if (clusterSupported) {
+        try {
+          busesCluster = L.markerClusterGroup();
+          stopsCluster = L.markerClusterGroup();
+          map.addLayer(busesCluster);
+          map.addLayer(stopsCluster);
+          console.log('[WebView] Clusters initialized');
+        } catch(e) {
+          console.warn('[WebView] Cluster init failed, using direct layers', e);
+          busesCluster = null;
+          stopsCluster = null;
+          // Add geo layers directly so markers are visible
+          busesGeoLayer.addTo(map);
+          stopsGeoLayer.addTo(map);
+        }
+      } else {
+        console.warn('[WebView] Cluster plugin not available, adding GeoJSON layers directly');
+        busesGeoLayer.addTo(map);
+        stopsGeoLayer.addTo(map);
+      }
       
       // Create user marker
       createUserMarker();
@@ -491,6 +553,15 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       
       // Notify React Native that map is ready
       postMessage('mapReady', { status: 'initialized' });
+
+      // If there was data sent before map was ready, apply it now
+      if (pendingDataQueue) {
+        try {
+          console.log('[WebView] Applying queued data after init');
+          updateMapData(pendingDataQueue);
+        } catch(e) { console.error('[WebView] Failed applying queued data', e); }
+        pendingDataQueue = null;
+      }
     }
     
     function createUserMarker() {
@@ -550,6 +621,13 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       // Update buses and stops without recentering
       const buses = data.buses || [];
       const stops = data.stops || [];
+
+      // If layers not ready yet, queue the latest data
+      if (!map || !busesGeoLayer || !stopsGeoLayer || !busesCluster || !stopsCluster) {
+        console.log('[WebView] Map/layers not ready yet, queueing data');
+        pendingDataQueue = data;
+        return;
+      }
       
       renderBuses(buses, data.showBuses);
       renderStops(stops, data.showStops);
@@ -557,14 +635,20 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     
     function renderBuses(buses, showBuses) {
       console.log('[WebView] renderBuses called:', buses.length, 'buses, showBuses:', showBuses);
-      busesCluster.clearLayers();
+      
+      // Clear existing data
+  busesGeoLayer && busesGeoLayer.clearLayers();
+  if (busesCluster) { busesCluster.clearLayers(); }
       
       if (!showBuses || !buses.length) {
         console.log('[WebView] Skipping bus rendering');
         return;
       }
       
+      // Convert to GeoJSON format
+      const geojsonFeatures = [];
       let renderedCount = 0;
+      
       buses.forEach(bus => {
         // Handle different bus data formats
         let lat, lng, props = {};
@@ -583,39 +667,60 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
           return;
         }
         
-        const isActive = !!(props.linha || props.cd_linha || props.servico);
-        const linha = props.linha || props.cd_linha || props.servico || 'N/A';
+        // Create GeoJSON feature
+        const feature = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [lng, lat]
+          },
+          properties: props
+        };
         
-        const busIcon = L.divIcon({
-          className: 'bus-marker' + (isActive ? ' active' : ''),
-          html: '🚌',
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        });
-        
-        const marker = L.marker([lat, lng], { icon: busIcon });
-        
-        // Create popup
-        const popupContent = createBusPopup(props);
-        marker.bindPopup(popupContent);
-        
-        busesCluster.addLayer(marker);
+        geojsonFeatures.push(feature);
         renderedCount++;
       });
       
-      console.log('[WebView] Successfully rendered', renderedCount, 'buses');
+      const geojson = {
+        type: 'FeatureCollection',
+        features: geojsonFeatures
+      };
+      
+      // Add to GeoJSON layer first
+      busesGeoLayer.addData(geojson);
+      
+      // Then rebuild cluster from GeoJSON layer (like the old map)
+      if (busesCluster) {
+        rebuildBusesCluster();
+        const clusterCount = busesCluster.getLayers ? busesCluster.getLayers().length : 'n/a';
+        if ((clusterCount === 0 || clusterCount === 'n/a') && renderedCount > 0) {
+          console.warn('[WebView] Cluster empty after adding buses – falling back to direct layer');
+          if (!map.hasLayer(busesGeoLayer)) busesGeoLayer.addTo(map);
+        }
+        console.log('[WebView] Successfully rendered', renderedCount, 'buses (cluster layers:', clusterCount, ')');
+      } else {
+        // Direct layer mode
+        if (!map.hasLayer(busesGeoLayer)) busesGeoLayer.addTo(map);
+        console.log('[WebView] Successfully rendered', renderedCount, 'buses (direct layer)');
+      }
     }
     
     function renderStops(stops, showStops) {
       console.log('[WebView] renderStops called:', stops.length, 'stops, showStops:', showStops);
-      stopsCluster.clearLayers();
+      
+      // Clear existing data
+      stopsGeoLayer && stopsGeoLayer.clearLayers();
+      if (stopsCluster) { stopsCluster.clearLayers(); }
       
       if (!showStops || !stops.length) {
         console.log('[WebView] Skipping stops rendering');
         return;
       }
       
+      // Convert to GeoJSON format
+      const geojsonFeatures = [];
       let renderedCount = 0;
+      
       stops.forEach(stop => {
         // Handle different stop data formats
         let lat, lng, props = {};
@@ -634,24 +739,95 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
           return;
         }
         
-        const stopIcon = L.divIcon({
-          className: 'stop-marker',
-          html: '🚏',
-          iconSize: [20, 20],
-          iconAnchor: [10, 10]
-        });
+        // Create GeoJSON feature
+        const feature = {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [lng, lat]
+          },
+          properties: props
+        };
         
-        const marker = L.marker([lat, lng], { icon: stopIcon });
-        
-        // Create popup
-        const popupContent = createStopPopup(props);
-        marker.bindPopup(popupContent);
-        
-        stopsCluster.addLayer(marker);
+        geojsonFeatures.push(feature);
         renderedCount++;
       });
       
-      console.log('[WebView] Successfully rendered', renderedCount, 'stops');
+      const geojson = {
+        type: 'FeatureCollection',
+        features: geojsonFeatures
+      };
+      
+      // Add to GeoJSON layer first
+      stopsGeoLayer.addData(geojson);
+      
+      // Then rebuild cluster from GeoJSON layer (like the old map)
+      if (stopsCluster) {
+        rebuildStopsCluster();
+        const clusterCount = stopsCluster.getLayers ? stopsCluster.getLayers().length : 'n/a';
+        if ((clusterCount === 0 || clusterCount === 'n/a') && renderedCount > 0) {
+          console.warn('[WebView] Cluster empty after adding stops – falling back to direct layer');
+          if (!map.hasLayer(stopsGeoLayer)) stopsGeoLayer.addTo(map);
+        }
+        console.log('[WebView] Successfully rendered', renderedCount, 'stops (cluster layers:', clusterCount, ')');
+      } else {
+        if (!map.hasLayer(stopsGeoLayer)) stopsGeoLayer.addTo(map);
+        console.log('[WebView] Successfully rendered', renderedCount, 'stops (direct layer)');
+      }
+    }
+    
+    function rebuildBusesCluster() {
+      if (!busesCluster || !busesGeoLayer) return;
+      
+      try {
+        busesCluster.clearLayers();
+        busesGeoLayer.eachLayer(function(marker) {
+          try {
+            const latLng = marker.getLatLng();
+            if (!latLng) return;
+            
+            // Clone the marker for the cluster
+            const clonedMarker = L.marker(latLng, { icon: marker.options.icon });
+            if (marker.getPopup()) {
+              clonedMarker.bindPopup(marker.getPopup().getContent());
+            }
+            
+            busesCluster.addLayer(clonedMarker);
+          } catch (e) {
+            console.error('[WebView] Error adding bus to cluster:', e);
+          }
+        });
+        console.log('[WebView] Buses cluster rebuilt');
+      } catch (e) {
+        console.error('[WebView] Error rebuilding buses cluster:', e);
+      }
+    }
+    
+    function rebuildStopsCluster() {
+      if (!stopsCluster || !stopsGeoLayer) return;
+      
+      try {
+        stopsCluster.clearLayers();
+        stopsGeoLayer.eachLayer(function(marker) {
+          try {
+            const latLng = marker.getLatLng();
+            if (!latLng) return;
+            
+            // Clone the marker for the cluster
+            const clonedMarker = L.marker(latLng, { icon: marker.options.icon });
+            if (marker.getPopup()) {
+              clonedMarker.bindPopup(marker.getPopup().getContent());
+            }
+            
+            stopsCluster.addLayer(clonedMarker);
+          } catch (e) {
+            console.error('[WebView] Error adding stop to cluster:', e);
+          }
+        });
+        console.log('[WebView] Stops cluster rebuilt');
+      } catch (e) {
+        console.error('[WebView] Error rebuilding stops cluster:', e);
+      }
     }
     
     function createBusPopup(props) {
@@ -769,6 +945,15 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', initMap);
+    
+    // Also try immediate init if DOM is already ready
+    if (document.readyState === 'loading') {
+      // DOM is still loading, wait for DOMContentLoaded
+      document.addEventListener('DOMContentLoaded', initMap);
+    } else {
+      // DOM is already loaded, init immediately
+      initMap();
+    }
   </script>
 </body>
 </html>
