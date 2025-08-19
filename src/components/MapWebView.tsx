@@ -86,9 +86,22 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
   // Handle messages from WebView
   const [webViewReady, setWebViewReady] = React.useState(false);
   
+  // Add timeout to detect if WebView is not responding
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!webViewReady) {
+        console.warn('[MapWebView] WebView not ready after 10 seconds - possible initialization issue');
+      }
+    }, 10000);
+    
+    return () => clearTimeout(timeout);
+  }, [webViewReady]);
+
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
+    console.log('[MapWebView] Received message from WebView:', event.nativeEvent.data);
     try {
       const message = JSON.parse(event.nativeEvent.data);
+      console.log('[MapWebView] Parsed message:', message.type, message);
       
       switch (message.type) {
         case 'log':
@@ -96,6 +109,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
           break;
           
         case 'mapReady':
+          console.log('[MapWebView] Map is ready!');
           setWebViewReady(true);
           onMapReady?.();
           break;
@@ -131,7 +145,13 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
 
   // Send data to WebView when it changes
   useEffect(() => {
-    if (!webViewRef.current || !webViewReady) return;
+    console.log('[MapWebView] useEffect triggered - webViewReady:', webViewReady, 'webViewRef.current:', !!webViewRef.current);
+    
+    if (!webViewRef.current || !webViewReady) {
+      console.log('[MapWebView] WebView not ready yet, skipping data send');
+      return;
+    }
+    
     if (showBuses) {
       fetchBuses();
     }
@@ -148,19 +168,21 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       selectedLines,
     };
 
-    console.log('[MapWebView] Sending data to WebView:', {
-      busesCount: buses.length,
-      stopsCount: stops.length,
-      linesCount: lines.length,
-      showBuses,
-      showStops,
-      hasUserLocation: !!userLocation
-    });
+    // console.log('[MapWebView] Sending data to WebView:', {
+    //   busesCount: buses.length,
+    //   stopsCount: stops.length,
+    //   linesCount: lines.length,
+    //   showBuses,
+    //   showStops,
+    //   hasUserLocation: !!userLocation
+    // });
 
-    webViewRef.current.postMessage(JSON.stringify({
+    const messageToSend = JSON.stringify({
       type: 'updateData',
       data: dataToSend,
-    }));
+    });
+  
+    webViewRef.current.postMessage(messageToSend);
   }, [webViewReady, buses, stops, lines, userLocation, mapStyle, showBuses, showStops, showOnlyActiveBuses, selectedLines, fetchBuses]);
 
   useImperativeHandle(ref, () => ({
@@ -911,7 +933,16 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     
     // Handle messages from React Native
     window.addEventListener('message', function(event) {
-      console.log('[WebView] Received message:', event.data);
+      console.log('[WebView] *** RECEIVED MESSAGE ***:', typeof event.data, event.data);
+      
+      // Send confirmation back to React Native
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          tag: 'message-received',
+          msg: 'WebView received: ' + (typeof event.data) + ' - ' + (event.data ? String(event.data).substring(0, 100) : 'null')
+        }));
+      }
       
       try {
         const message = JSON.parse(event.data);
@@ -931,6 +962,12 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       } catch (e) {
         console.error('[WebView] Error parsing message:', e);
       }
+    });
+    
+    // Also try listening on document
+    console.log('[WebView] Setting up document message listener as fallback...');
+    document.addEventListener('message', function(event) {
+      console.log('[WebView] Document received message:', event.data);
     });
     
     // Expose global functions
