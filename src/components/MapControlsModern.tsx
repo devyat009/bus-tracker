@@ -39,7 +39,8 @@ const MapControls = ({ mapRef }: MapControlsProps) => {
       console.warn('location',location);
       if (location && mapRef.current) {
         console.log('Centering map on user location:', location);
-        mapRef.current.setUserPosition(location.latitude, location.longitude, 16);
+        // Use recenter to center the map AND move the marker
+        mapRef.current.recenter(location.latitude, location.longitude, 16);
         mapRef.current.setUserMarkerVisible(true);
         mapRef.current.showToast?.('Localização atualizada', 2000);
       } else {

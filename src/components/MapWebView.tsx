@@ -15,18 +15,9 @@ export interface MapWebViewHandle {
   showLoading: (text?: string, progress?: number) => void;
   hideLoading: () => void;
   showToast: (message: string, duration?: number) => void;
-  setUserPosition: (lat: number, lng: number, zoom?: number) => void;
+  setUserPosition: (lat: number, lng: number) => void;
   setUserMarkerVisible: (visible: boolean) => void;
   setBusRoute: (lineCode: string) => void;
-  // setRoute: (code: string) => void;
-  // fitToBounds: (bounds: MapBounds) => void;
-  // //getUserLocation: () => UserLocation | null;
-  // setUserPosition: (lat: number, lng: number, zoom?: number) => void;
-  // setUserMarkerVisible: (visible: boolean) => void;
-  // setBusRoute: (lineCode: string) => void;
-  // showLoading: (text?: string, progress?: number) => void;
-  // hideLoading: () => void;
-  // showToast: (message: string, duration?: number) => void;
 }
 
 const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
@@ -49,7 +40,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
   } = useAppStore();
 
   const buses = useAppStore(selectFilteredBuses);
-  const { userLocation } = useLocation();
+  const { userLocation, watchLocation } = useLocation();
   const { fetchBuses, fetchStops, fetchLines } = useDataFetching();
 
   // Calculate bounds for data fetching
@@ -189,9 +180,9 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
         if(window.showToast){window.showToast(${JSON.stringify(message)},${duration});} true;
       `);
     },
-    setUserPosition: (lat, lng, zoom = 16) => {
+    setUserPosition: (lat, lng) => {
       webViewRef.current?.injectJavaScript(`
-        if(window.setUserPosition){window.setUserPosition(${lat},${lng},${zoom});} true;
+        if(window.setUserPosition){window.setUserPosition(${lat},${lng});} true;
       `);
     },
     setUserMarkerVisible: (visible) => {
@@ -212,6 +203,36 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     fetchBuses(bounds);
     fetchStops(bounds);
   }, [fetchLines, fetchBuses, fetchStops, bounds]);
+
+  // Follow user location automatically (move marker only, don't recenter map)
+  useEffect(() => {
+    if (userLocation && webViewRef.current) {
+      console.log('User location changed, updating marker:', userLocation);
+      // Only move the marker, don't recenter the map
+      webViewRef.current.injectJavaScript(`
+        if(window.setUserPosition){window.setUserPosition(${userLocation.latitude},${userLocation.longitude});} 
+        if(window.setUserMarkerVisible){window.setUserMarkerVisible(true);}
+        true;
+      `);
+    }
+  }, [userLocation]);
+
+  // Start watching location when component mounts
+  useEffect(() => {
+    let subscription: any = null;
+    
+    const startWatching = async () => {
+      subscription = await watchLocation();
+    };
+    
+    startWatching();
+    
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [watchLocation]);
 
   // inline HTML
   const htmlContent = `
@@ -428,20 +449,18 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       });
     }
     
-    function setUserPosition(lat, lng, zoom) {
+    // Move only the user marker WITHOUT recentering the map
+    function setUserPosition(lat, lng) {
+      console.log('[WebView] setUserPosition called:', lat, lng);
       if (!userMarker) {
         createUserMarker();
       }
       userMarker.setLatLng([lat, lng]);
-      const targetZoom = zoom || map.getZoom();
-      map.flyTo([lat, lng], targetZoom, { 
-        animate: true, 
-        duration: 0.8 
-      });
       
       if (userMarkerVisible && !map.hasLayer(userMarker)) {
         userMarker.addTo(map);
       }
+      // DO NOT call flyTo here - only move the marker!
     }
     
     function setUserMarkerVisible(visible) {
