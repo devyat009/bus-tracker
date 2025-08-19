@@ -2,10 +2,10 @@ import React, { useCallback } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocation } from '../hooks/useLocation';
 import { useAppStore } from '../store';
-import { MapHandle } from './Map';
+import { MapWebViewHandle } from './MapWebView';
 
 interface MapControlsProps {
-  mapRef: React.RefObject<MapHandle>;
+  mapRef: React.RefObject<MapWebViewHandle>;
 }
 
 const MapControls = ({ mapRef }: MapControlsProps) => {
@@ -35,24 +35,18 @@ const MapControls = ({ mapRef }: MapControlsProps) => {
   // Recenter map on user location
   const handleRecenter = useCallback(async () => {
     try {
-      mapRef.current?.showLoading('Obtendo localização...', 20);
-      
       const location = await getCurrentLocation();
       console.warn('location',location);
       if (location && mapRef.current) {
         console.log('Centering map on user location:', location);
         mapRef.current.setUserPosition(location.latitude, location.longitude, 16);
         mapRef.current.setUserMarkerVisible(true);
-        mapRef.current.showToast('Localização atualizada', 2000);
+        mapRef.current.showToast?.('Localização atualizada', 2000);
       } else {
         console.log('Failed to get current location:', location);
-        mapRef.current?.showToast('Não foi possível obter sua localização', 3000);
       }
     } catch (error) {
       console.error('Error getting location:', error);
-      mapRef.current?.showToast('Erro ao obter localização', 3000);
-    } finally {
-      mapRef.current?.hideLoading();
     }
   }, [getCurrentLocation, mapRef]);
 
@@ -60,7 +54,6 @@ const MapControls = ({ mapRef }: MapControlsProps) => {
   const handleClearRoute = useCallback(() => {
     if (mapRef.current) {
       mapRef.current.setBusRoute('');
-      mapRef.current.showToast('Rota limpa', 1500);
     }
     clearSelectedLines();
   }, [mapRef, clearSelectedLines]);
@@ -68,11 +61,7 @@ const MapControls = ({ mapRef }: MapControlsProps) => {
   // Show the bus route
   const handleShowRoute = useCallback(() => {
     if (selectedLines.length > 0 && mapRef.current) {
-      mapRef.current.showLoading('Carregando rota...', 50);
       mapRef.current.setBusRoute(selectedLines[0]);
-      setTimeout(() => {
-        mapRef.current?.hideLoading();
-      }, 1500);
     }
   }, [selectedLines, mapRef]);
 

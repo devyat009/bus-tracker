@@ -299,35 +299,48 @@
       // =================================================================
 
       setUserPosition(lat, lng, zoom) {
-        if (!this.userMarker) return;
-        
+        if (!this.userMarker) {
+          this.createUserMarker();
+          console.log('[ModernBusMap] userMarker was null, created new marker');
+        }
         this.userMarker.setLatLng([lat, lng]);
         const targetZoom = zoom || this.map.getZoom();
         this.map.flyTo([lat, lng], targetZoom, { 
           animate: true, 
           duration: 0.8 
         });
-        
-        if (this.userMarkerVisible && !this.map.hasLayer(this.userMarker)) {
-          this.userMarker.addTo(this.map);
+        if (this.userMarkerVisible) {
+          if (!this.map.hasLayer(this.userMarker)) {
+            this.userMarker.addTo(this.map);
+            console.log('[ModernBusMap] userMarker added to map in setUserPosition');
+          }
+        } else {
+          if (this.map.hasLayer(this.userMarker)) {
+            this.map.removeLayer(this.userMarker);
+            console.log('[ModernBusMap] userMarker removed from map in setUserPosition');
+          }
         }
-        
         this.log('USER', `Position set to ${lat}, ${lng} (zoom: ${targetZoom})`);
       }
 
       setUserMarkerVisible(visible) {
         this.userMarkerVisible = !!visible;
-        
+        console.log('[ModernBusMap] setUserMarkerVisible:', visible, 'userMarker:', !!this.userMarker);
+        if (!this.userMarker) {
+          this.createUserMarker();
+          console.log('[ModernBusMap] userMarker was null, created new marker in setUserMarkerVisible');
+        }
         if (this.userMarkerVisible) {
           if (!this.map.hasLayer(this.userMarker)) {
             this.userMarker.addTo(this.map);
+            console.log('[ModernBusMap] userMarker added to map in setUserMarkerVisible');
           }
         } else {
           if (this.map.hasLayer(this.userMarker)) {
             this.map.removeLayer(this.userMarker);
+            console.log('[ModernBusMap] userMarker removed from map in setUserMarkerVisible');
           }
         }
-        
         this.log('USER', `Marker visibility: ${this.userMarkerVisible}`);
       }
 
@@ -349,18 +362,16 @@
         //   dataKeys: data ? Object.keys(data) : []
         // });
         
-        this.state = { ...this.state, ...data };
-        
-        const buses = data.buses || [];
-        const stops = data.stops || [];
-        
-        // console.log('[ModernBusMap] About to render buses:', buses.length);
-        // console.log('[ModernBusMap] About to render stops:', stops.length);
-        
-        this.renderBuses(buses);
-        this.renderStops(stops);
-        
-        // this.log('DATA', `Updated: ${buses.length} buses, ${stops.length} stops`);
+    this.state = { ...this.state, ...data };
+       
+    const buses = data.buses || [];
+    const stops = data.stops || [];
+       
+    this.renderBuses(buses);
+    this.renderStops(stops);
+       
+    // Removido: não chame setView/flyTo aqui!
+    // O mapa só deve recentralizar quando o usuário pedir explicitamente.
       }
 
       setBusRoute(lineCode) {

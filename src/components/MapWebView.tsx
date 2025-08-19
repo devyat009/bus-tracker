@@ -40,7 +40,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     showStops,
     showOnlyActiveBuses,
     selectedLines,
-    center,
+    // center,
     zoom,
     stops,
     lines,
@@ -62,48 +62,6 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
   const bounds = getBoundsForFetching();
   useAutoRefresh(bounds, 10000);
 
-  // Handle messages from WebView
-  const handleMessage = useCallback((event: WebViewMessageEvent) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data);
-      
-      switch (message.type) {
-        case 'log':
-          console.log(`[WebView:${message.tag}]`, message.msg, message.extra);
-          break;
-          
-        case 'mapReady':
-          onMapReady?.();
-          break;
-          
-        case 'mapError':
-          onMapError?.(message.error);
-          break;
-          
-        case 'mapMoved':
-          if (message.center && message.zoom) {
-            setMapCenter(message.center.lat, message.center.lng);
-            setMapZoom(message.zoom);
-          }
-          break;
-          
-        case 'fetch':
-          // Handle fetch requests from WebView
-          handleWebViewFetch(message.id, message.url);
-          break;
-          
-        case 'setMapStyle':
-          // This could be handled by the store directly
-          break;
-          
-        default:
-          console.warn('Unknown message type from WebView:', message.type);
-      }
-    } catch {
-      console.error('Failed to parse WebView message:');
-    }
-  }, [onMapReady, onMapError, setMapCenter, setMapZoom]);
-
   // Handle fetch requests from WebView (bypass CORS)
   const handleWebViewFetch = useCallback(async (id: number, url: string) => {
     try {
@@ -122,7 +80,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
         status: response.status,
         text,
       }));
-    } catch (error) {
+    } catch {
       // Send error back to WebView
       webViewRef.current?.postMessage(JSON.stringify({
         type: 'fetchResponse',
@@ -133,6 +91,49 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
       }));
     }
   }, []);
+
+  // Handle messages from WebView
+  const handleMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const message = JSON.parse(event.nativeEvent.data);
+      
+      switch (message.type) {
+        case 'log':
+          console.log(`[WebView:${message.tag}]`, message.msg, message.extra);
+          break;
+          
+        case 'mapReady':
+          onMapReady?.();
+          break;
+          
+        case 'mapError':
+          onMapError?.(message.error);
+          break;
+          
+        case 'centerChanged':
+        case 'zoomChanged':
+          // Do NOT update the store when user manually moves the map
+          // This prevents the auto-recenter bug
+          // setMapCenter(message.center.lat, message.center.lng);
+          // setMapZoom(message.zoom);
+          break;
+          
+        case 'fetch':
+          // Handle fetch requests from WebView
+          handleWebViewFetch(message.id, message.url);
+          break;
+          
+        case 'setMapStyle':
+          // This could be handled by the store directly
+          break;
+          
+        default:
+          console.warn('Unknown message type from WebView:', message.type);
+      }
+    } catch {
+      console.error('Failed to parse WebView message:');
+    }
+  }, [onMapReady, onMapError, handleWebViewFetch]);
 
   // Send data to WebView when it changes
   useEffect(() => {
@@ -155,7 +156,7 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
         selectedLines,
       },
     }));
-  }, [buses, stops, lines, userLocation, mapStyle, showBuses, showStops, showOnlyActiveBuses, selectedLines]);
+  }, [buses, stops, lines, userLocation, mapStyle, showBuses, showStops, showOnlyActiveBuses, selectedLines, fetchBuses]);
 
   useImperativeHandle(ref, () => ({
     recenter: (lat: number, lng: number, zoomLevel?: number) => {
@@ -212,62 +213,362 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
     fetchStops(bounds);
   }, [fetchLines, fetchBuses, fetchStops, bounds]);
 
+  // inline HTML
   const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
-    html, body, #map {
-      height: 100%;
+    * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
     }
     
-    .loading {
+    html, body, #map {
+      height: 100%;
+      width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* User location marker with pulse animation */
+    .user-marker {
+      position: relative;
+      width: 20px;
+      height: 20px;
+    }
+
+    .user-marker-pulse {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 20px;
+      height: 20px;
+      background: #007AFF;
+      opacity: 0.4;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .user-marker-inner {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      background: #007AFF;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0, 122, 255, 0.3);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(1.5); opacity: 0.1; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+
+    /* Loading overlay */
+    #loading-overlay {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
+      z-index: 1000;
+      display: none;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      text-align: center;
+      min-width: 140px;
+    }
+
+    #loading-text {
+      color: #333;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    #loading-bar {
+      width: 100%;
+      height: 4px;
+      background: #f0f0f0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #loading-progress {
+      height: 100%;
+      background: linear-gradient(90deg, #007AFF, #34C759);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    /* Toast notifications */
+    #toast {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      display: none;
       background: rgba(0, 0, 0, 0.8);
       color: white;
-      padding: 20px;
+      padding: 12px 16px;
       border-radius: 8px;
-      z-index: 1000;
+      font-size: 14px;
+      max-width: 80%;
+      text-align: center;
+    }
+
+    /* Custom marker styles */
+    .bus-marker {
+      background: #FF3B30;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(255, 59, 48, 0.4);
+    }
+
+    .bus-marker.active {
+      background: #34C759;
+      box-shadow: 0 2px 6px rgba(52, 199, 89, 0.4);
+    }
+
+    .stop-marker {
+      background: #007AFF;
+      border: 2px solid #fff;
+      border-radius: 3px;
+      box-shadow: 0 2px 6px rgba(0, 122, 255, 0.4);
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="loading" class="loading" style="display: none;">Loading...</div>
   
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div id="loading-text">Carregando...</div>
+    <div id="loading-bar">
+      <div id="loading-progress"></div>
+    </div>
+  </div>
+  
+  <!-- Toast notifications -->
+  <div id="toast"></div>
+
+  <!-- Load Leaflet and plugins -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  
   <script>
+    let map;
+    let userMarker;
+    let userMarkerVisible = false;
+    let busesCluster;
+    let stopsCluster;
+    let routeLayer;
+    
     // Initialize map
-    const map = L.map('map').setView([${center.latitude}, ${center.longitude}], ${zoom});
+    function initMap() {
+      map = L.map('map').setView([-15.7942, -47.8822], 11);
+      
+      // Add tile layer
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+      
+      // Create clusters
+      busesCluster = L.markerClusterGroup();
+      stopsCluster = L.markerClusterGroup();
+      routeLayer = L.layerGroup();
+      
+      map.addLayer(busesCluster);
+      map.addLayer(stopsCluster);
+      map.addLayer(routeLayer);
+      
+      // Create user marker
+      createUserMarker();
+      
+      // Setup event listeners
+      map.on('moveend', function() {
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        postMessage('centerChanged', { 
+          center: { lat: center.lat, lng: center.lng }, 
+          zoom 
+        });
+      });
+      
+      map.on('zoomend', function() {
+        const zoom = map.getZoom();
+        postMessage('zoomChanged', { zoom });
+      });
+      
+      // Notify React Native that map is ready
+      postMessage('mapReady', { status: 'initialized' });
+    }
     
-    // Map layers will be managed by React Native
-    let currentLayer = null;
-    let busLayer = null;
-    let stopLayer = null;
-    let routeLayer = null;
+    function createUserMarker() {
+      const userIcon = L.divIcon({
+        className: '',
+        html: '<div class="user-marker"><div class="user-marker-pulse"></div><div class="user-marker-inner"></div></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      userMarker = L.marker([-15.7942, -47.8822], { 
+        icon: userIcon 
+      });
+    }
     
-    // Initialize with default OSM layer
-    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap contributors'
-    });
-    osmLayer.addTo(map);
-    currentLayer = osmLayer;
+    function setUserPosition(lat, lng, zoom) {
+      if (!userMarker) {
+        createUserMarker();
+      }
+      userMarker.setLatLng([lat, lng]);
+      const targetZoom = zoom || map.getZoom();
+      map.flyTo([lat, lng], targetZoom, { 
+        animate: true, 
+        duration: 0.8 
+      });
+      
+      if (userMarkerVisible && !map.hasLayer(userMarker)) {
+        userMarker.addTo(map);
+      }
+    }
     
-    // Notify React Native that map is ready
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'mapReady'
-    }));
+    function setUserMarkerVisible(visible) {
+      userMarkerVisible = !!visible;
+      if (!userMarker) {
+        createUserMarker();
+      }
+      
+      if (userMarkerVisible) {
+        if (!map.hasLayer(userMarker)) {
+          userMarker.addTo(map);
+        }
+      } else {
+        if (map.hasLayer(userMarker)) {
+          map.removeLayer(userMarker);
+        }
+      }
+    }
+    
+    function recenterOnly(lat, lng, zoom) {
+      const targetZoom = zoom || map.getZoom();
+      map.flyTo([lat, lng], targetZoom, { 
+        animate: true, 
+        duration: 0.8 
+      });
+    }
+    
+    function updateMapData(data) {
+      // Update buses and stops without recentering
+      const buses = data.buses || [];
+      const stops = data.stops || [];
+      
+      renderBuses(buses, data.showBuses);
+      renderStops(stops, data.showStops);
+    }
+    
+    function renderBuses(buses, showBuses) {
+      busesCluster.clearLayers();
+      
+      if (!showBuses || !buses.length) {
+        return;
+      }
+      
+      buses.forEach(bus => {
+        if (!bus.geometry || !bus.geometry.coordinates) return;
+        
+        const [lng, lat] = bus.geometry.coordinates;
+        const props = bus.properties || {};
+        
+        const busIcon = L.divIcon({
+          className: 'bus-marker',
+          html: '🚌',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        
+        const marker = L.marker([lat, lng], { icon: busIcon });
+        busesCluster.addLayer(marker);
+      });
+    }
+    
+    function renderStops(stops, showStops) {
+      stopsCluster.clearLayers();
+      
+      if (!showStops || !stops.length) {
+        return;
+      }
+      
+      stops.forEach(stop => {
+        if (!stop.geometry || !stop.geometry.coordinates) return;
+        
+        const [lng, lat] = stop.geometry.coordinates;
+        
+        const stopIcon = L.divIcon({
+          className: 'stop-marker',
+          html: '🚏',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+        
+        const marker = L.marker([lat, lng], { icon: stopIcon });
+        stopsCluster.addLayer(marker);
+      });
+    }
+    
+    function showLoading(text = 'Carregando...', progress = 0) {
+      const overlay = document.getElementById('loading-overlay');
+      const textEl = document.getElementById('loading-text');
+      const progressEl = document.getElementById('loading-progress');
+      
+      if (overlay && textEl && progressEl) {
+        textEl.textContent = text;
+        progressEl.style.width = Math.min(100, Math.max(0, progress)) + '%';
+        overlay.style.display = 'block';
+      }
+    }
+
+    function hideLoading() {
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        overlay.style.display = 'none';
+      }
+    }
+
+    function showToast(message, duration = 3000) {
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = message;
+        toast.style.display = 'block';
+        
+        setTimeout(() => {
+          toast.style.display = 'none';
+        }, duration);
+      }
+    }
+    
+    function setBusRoute(lineCode) {
+      routeLayer.clearLayers();
+      // Route implementation would go here
+    }
+    
+    function postMessage(type, data = {}) {
+      if (window.ReactNativeWebView) {
+        const message = { type, ...data, timestamp: Date.now() };
+        window.ReactNativeWebView.postMessage(JSON.stringify(message));
+      }
+    }
     
     // Handle messages from React Native
     window.addEventListener('message', function(event) {
@@ -277,33 +578,21 @@ const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
         case 'updateData':
           updateMapData(message.data);
           break;
-        case 'setMapStyle':
-          setMapStyle(message.style);
-          break;
       }
     });
     
-    function updateMapData(data) {
-      // Update buses, stops, lines, etc.
-      console.log('Updating map data:', data);
-    }
+    // Expose global functions
+    window.setUserPosition = setUserPosition;
+    window.setUserMarkerVisible = setUserMarkerVisible;
+    window.recenterOnly = recenterOnly;
+    window.updateMapData = updateMapData;
+    window.setBusRoute = setBusRoute;
+    window.showLoading = showLoading;
+    window.hideLoading = hideLoading;
+    window.showToast = showToast;
     
-    function setMapStyle(style) {
-      // Implementation for changing map style
-      console.log('Setting map style:', style);
-    }
-    
-    // Listen for map events
-    map.on('moveend', function() {
-      const center = map.getCenter();
-      const zoom = map.getZoom();
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'mapMoved',
-        center: { lat: center.lat, lng: center.lng },
-        zoom: zoom
-      }));
-    });
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', initMap);
   </script>
 </body>
 </html>
