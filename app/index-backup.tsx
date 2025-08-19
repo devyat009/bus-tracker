@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef } from "react";
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Map, { MapHandle } from "../src/components/Map";
 import { useLocation } from "../src/hooks/useLocation";
 import { useAppStore } from "../src/store";
@@ -9,15 +9,17 @@ export default function Index() {
   const mapRef = useRef<MapHandle>(null);
   
   // Use the new location hook
-  const { userLocation, getCurrentLocation, requestPermission } = useLocation();
+  const { userLocation, getCurrentLocation, requestPermission, watchLocation } = useLocation();
   
   // Use the app store
   const { 
     setMapCenter, 
     setMapZoom,
-    loading 
+    loading,
+    errors 
   } = useAppStore();
 
+  
   // Handle location button press
   const handleLocatePress = async () => {
     try {
@@ -27,13 +29,19 @@ export default function Index() {
         setMapCenter(location.latitude, location.longitude);
         setMapZoom(16);
         mapRef.current.recenter(location.latitude, location.longitude, 16);
+        console.warn('recentered map to', location.latitude, location.longitude);
+      } else {
+        if (errors.location) {
+          Alert.alert('Erro de Localização', errors.location);
+        }
       }
     } catch (error) {
       console.error('Failed to get location:', error);
+      Alert.alert('Erro', 'Não foi possível obter sua localização');
     }
   };
 
-  // Request permission on mount
+  // Request permission and start watching location on mount
   useEffect(() => {
     requestPermission();
   }, [requestPermission]);

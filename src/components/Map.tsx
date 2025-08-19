@@ -18,6 +18,12 @@ export interface MapHandle {
   setRoute: (code: string) => void;
   fitToBounds: (bounds: MapBounds) => void;
   getUserLocation: () => UserLocation | null;
+  setUserPosition: (lat: number, lng: number, zoom?: number) => void;
+  setUserMarkerVisible: (visible: boolean) => void;
+  setBusRoute: (lineCode: string) => void;
+  showLoading: (text?: string, progress?: number) => void;
+  hideLoading: () => void;
+  showToast: (message: string, duration?: number) => void;
 }
 
 const Map = forwardRef<MapHandle, MapProps>(({
@@ -34,9 +40,9 @@ const Map = forwardRef<MapHandle, MapProps>(({
     showBuses,
     showStops,
     showOnlyActiveBuses,
+    selectedLines,
     center,
     zoom,
-    buses,
     stops,
     lines,
     userLocation,
@@ -46,7 +52,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
   } = useAppStore();
 
   // Hooks
-  const { getCurrentLocation, requestPermission } = useLocation();
+  const { requestPermission } = useLocation();
   const { fetchBuses, fetchStops, fetchLines } = useDataFetching();
 
   // Filtered data
@@ -67,8 +73,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
       // Add memory-safe parameters to URL
       let safeUrl = url;
       if (!url.includes('maxFeatures')) {
-        const maxFeatures = isBusesRequest ? 300 : 
-                           url.includes('Paradas') ? 150 : 50;
+        const maxFeatures = isBusesRequest ? 300 : url.includes('Paradas') ? 150 : 50;
         safeUrl += `&maxFeatures=${maxFeatures}`;
       }
       
@@ -134,8 +139,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
       
       const targetZoom = zoomLevel ?? zoom;
       const js = `
-        if (window.recenterMap) {
-          window.recenterMap(${lat}, ${lng}, ${targetZoom});
+        if (window.recenterOnly) {
+          window.recenterOnly(${lat}, ${lng}, ${targetZoom});
         }
         true;
       `;
@@ -151,8 +156,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
       
       const sanitizedCode = code.replace(/[^0-9A-Za-z _.-]/g, '');
       const js = `
-        if (window.highlightRoute) {
-          window.highlightRoute(${JSON.stringify(sanitizedCode)});
+        if (window.setBusRoute) {
+          window.setBusRoute(${JSON.stringify(sanitizedCode)});
         }
         true;
       `;
@@ -172,6 +177,83 @@ const Map = forwardRef<MapHandle, MapProps>(({
     },
     
     getUserLocation: () => userLocation,
+
+    setUserPosition: (lat: number, lng: number, zoomLevel?: number) => {
+      if (!webViewRef.current) return;
+      
+      const js = `
+        if (window.setUserPosition) {
+          window.setUserPosition(${lat}, ${lng}, ${zoomLevel || 'undefined'});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+      
+      // Update store
+      setMapCenter(lat, lng);
+      if (zoomLevel) setMapZoom(zoomLevel);
+    },
+
+    setUserMarkerVisible: (visible: boolean) => {
+      if (!webViewRef.current) return;
+      
+      const js = `
+        if (window.setUserMarkerVisible) {
+          window.setUserMarkerVisible(${visible});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    },
+
+    setBusRoute: (lineCode: string) => {
+      if (!webViewRef.current) return;
+      
+      const sanitizedCode = lineCode.replace(/[^0-9A-Za-z _.-]/g, '');
+      const js = `
+        if (window.setBusRoute) {
+          window.setBusRoute(${JSON.stringify(sanitizedCode)});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    },
+
+    showLoading: (text?: string, progress?: number) => {
+      if (!webViewRef.current) return;
+      
+      const js = `
+        if (window.showLoading) {
+          window.showLoading(${JSON.stringify(text || 'Carregando...')}, ${progress || 0});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    },
+
+    hideLoading: () => {
+      if (!webViewRef.current) return;
+      
+      const js = `
+        if (window.hideLoading) {
+          window.hideLoading();
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    },
+
+    showToast: (message: string, duration?: number) => {
+      if (!webViewRef.current) return;
+      
+      const js = `
+        if (window.showToast) {
+          window.showToast(${JSON.stringify(message)}, ${duration || 3000});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    },
   }), [zoom, userLocation, setMapCenter, setMapZoom]);
 
   // Handle WebView messages
@@ -219,14 +301,13 @@ const Map = forwardRef<MapHandle, MapProps>(({
           setMapZoom(message.zoom);
           break;
           
-        case 'busClicked':
-          console.log('Bus clicked:', message.bus);
-          // Handle bus selection
-          break;
-          
-        case 'stopClicked':
-          console.log('Stop clicked:', message.stop);
-          // Handle stop selection
+          case 'requestRoute':
+          // Handle route request from WebView
+          if (message.lineCode) {
+            // Here you could fetch route data and send it back
+            // For now, we'll just acknowledge the request
+            console.log('Route requested for line:', message.lineCode);
+          }
           break;
           
         default:
@@ -239,27 +320,69 @@ const Map = forwardRef<MapHandle, MapProps>(({
 
   // Update map data when store changes
   useEffect(() => {
-    if (!webViewRef.current) return;
+    // Don't proceed if WebView is not available
+    if (!webViewRef.current) {
+      console.log('[Map:updateMapData] Skipping - WebView not ready');
+      return;
+    }
 
-    const js = `
-      if (window.updateMapData) {
-        window.updateMapData({
-          buses: ${JSON.stringify(showBuses ? filteredBuses : [])},
-          stops: ${JSON.stringify(showStops ? stops : [])},
-          lines: ${JSON.stringify(lines)},
-          userLocation: ${userLocation ? JSON.stringify(userLocation) : 'null'},
-          mapStyle: ${JSON.stringify(mapStyle)},
-        });
+    console.log('[Map:updateMapData] Preparing data update', {
+      buses: filteredBuses?.length || 0,
+      stops: stops?.length || 0,
+      showBuses,
+      showStops
+    });
+
+    const mapData = {
+      buses: showBuses ? (filteredBuses || []) : [],
+      stops: showStops ? (stops || []) : [],
+      lines: lines || [],
+      userLocation: userLocation || null,
+      mapStyle: mapStyle,
+      showBuses,
+      showStops,
+      showOnlyActiveBuses,
+      selectedLines: selectedLines || []
+    };
+
+    // console.log('[Map:DATA] Sending to WebView:', mapData);
+
+    // Add a small delay to ensure WebView is ready for function calls
+    const timer = setTimeout(() => {
+      if (webViewRef.current) {
+        const js = `
+          (function() {
+            console.log('[WebView] Attempting to update map data');
+            console.log('[WebView] Available window functions:', Object.keys(window).filter(k => typeof window[k] === 'function' && k.includes('update')));
+            
+            if (typeof window.updateMapData === 'function') {
+              console.log('[WebView] Calling updateMapData with data');
+              try {
+                window.updateMapData(${JSON.stringify(mapData)});
+                console.log('[WebView] updateMapData called successfully');
+              } catch (error) {
+                console.error('[WebView] Error calling updateMapData:', error);
+              }
+            } else {
+              console.warn('[WebView] updateMapData function not available');
+              console.log('[WebView] Available functions:', Object.keys(window).filter(k => typeof window[k] === 'function'));
+            }
+            return true;
+          })();
+        `;
+        webViewRef.current.injectJavaScript(js);
       }
-      true;
-    `;
-    webViewRef.current.injectJavaScript(js);
+    }, 500); // Give WebView time to be ready
+
+    return () => clearTimeout(timer);
   }, [
     filteredBuses,
     stops,
     lines,
     showBuses,
     showStops,
+    showOnlyActiveBuses,
+    selectedLines,
     userLocation,
     mapStyle,
   ]);
@@ -313,7 +436,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
     <View style={styles.container}>
       <WebView
         ref={webViewRef}
-        source={require('../../components/MapComponent/map.html')}
+        source={require('../../components/MapComponent/map_modern.html')}
         style={styles.webView}
         javaScriptEnabled
         domStorageEnabled

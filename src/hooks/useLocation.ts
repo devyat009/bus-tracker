@@ -39,6 +39,7 @@ export const useLocation = () => {
 
       const hasPermission = await requestPermission();
       if (!hasPermission) {
+        console.warn('Permissão negada');
         return null;
       }
 
@@ -58,7 +59,8 @@ export const useLocation = () => {
       setUserLocation(userLoc);
       return userLoc;
     } catch (error) {
-      setError('location', 'Failed to get current location');
+      console.error('Erro ao obter localização:', error);
+      setError('location', 'location');
       return null;
     } finally {
       setLoading('location', false);

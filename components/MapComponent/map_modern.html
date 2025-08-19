@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body, #map {
+      height: 100%;
+      width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* User location marker with pulse animation */
+    .user-marker {
+      position: relative;
+      width: 20px;
+      height: 20px;
+    }
+
+    .user-marker-pulse {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 20px;
+      height: 20px;
+      background: #007AFF;
+      opacity: 0.4;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .user-marker-inner {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      background: #007AFF;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0, 122, 255, 0.3);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(1.5); opacity: 0.1; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+
+    /* Loading overlay */
+    #loading-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+      display: none;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      text-align: center;
+      min-width: 140px;
+    }
+
+    #loading-text {
+      color: #333;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    #loading-bar {
+      width: 100%;
+      height: 4px;
+      background: #f0f0f0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #loading-progress {
+      height: 100%;
+      background: linear-gradient(90deg, #007AFF, #34C759);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    /* Toast notifications */
+    #toast {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      max-width: 80%;
+      text-align: center;
+    }
+
+    /* Custom marker styles */
+    .bus-marker {
+      background: #FF3B30;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(255, 59, 48, 0.4);
+    }
+
+    .bus-marker.active {
+      background: #34C759;
+      box-shadow: 0 2px 6px rgba(52, 199, 89, 0.4);
+    }
+
+    .stop-marker {
+      background: #007AFF;
+      border: 2px solid #fff;
+      border-radius: 3px;
+      box-shadow: 0 2px 6px rgba(0, 122, 255, 0.4);
+    }
+
+    /* Route line styles */
+    .bus-route {
+      stroke: #FF9500;
+      stroke-width: 4;
+      stroke-opacity: 0.8;
+      fill: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div id="loading-text">Carregando...</div>
+    <div id="loading-bar">
+      <div id="loading-progress"></div>
+    </div>
+  </div>
+  
+  <!-- Toast notifications -->
+  <div id="toast"></div>
+
+  <!-- Load Leaflet and plugins -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  
+  <script>
+    // =================================================================
+    // MODERN INTEGRATED MAP FOR BUS TRACKER
+    // Integrated with React Native + TypeScript + Zustand Architecture
+    // =================================================================
+
+    class ModernBusMap {
+      constructor() {
+        this.map = null;
+        this.userMarker = null;
+        this.userMarkerVisible = false;
+        this.busesLayer = null;
+        this.stopsLayer = null;
+        this.routeLayer = null;
+        this.busesCluster = null;
+        this.stopsCluster = null;
+        
+        // State synchronized with React Native store
+        this.state = {
+          center: { latitude: -15.7942, longitude: -47.8822 }, // Brasília
+          zoom: 11,
+          showBuses: true,
+          showStops: true,
+          showOnlyActiveBuses: false,
+          selectedLines: [],
+          userLocation: null
+        };
+        
+        this.init();
+      }
+
+      // =================================================================
+      // INITIALIZATION
+      // =================================================================
+      
+      init() {
+        this.createMap();
+        this.createLayers();
+        this.createUserMarker();
+        this.setupEventListeners();
+        this.postMessage('mapReady', { status: 'initialized' });
+        this.log('MAP', 'ModernBusMap initialized successfully');
+      }
+
+      createMap() {
+        this.map = L.map('map', {
+          center: [this.state.center.latitude, this.state.center.longitude],
+          zoom: this.state.zoom,
+          zoomControl: false, // We'll handle this in React Native
+          attributionControl: true
+        });
+
+        // Add tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(this.map);
+      }
+
+      createLayers() {
+        // Create layer groups
+        this.busesLayer = L.layerGroup();
+        this.stopsLayer = L.layerGroup();
+        this.routeLayer = L.layerGroup();
+        
+        // Create cluster groups
+        this.busesCluster = L.markerClusterGroup({
+          iconCreateFunction: (cluster) => {
+            const count = cluster.getChildCount();
+            return L.divIcon({
+              html: `<div style="background:#FF3B30;color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;">${count}</div>`,
+              className: 'custom-cluster-icon',
+              iconSize: [30, 30]
+            });
+          }
+        });
+        
+        this.stopsCluster = L.markerClusterGroup({
+          iconCreateFunction: (cluster) => {
+            const count = cluster.getChildCount();
+            return L.divIcon({
+              html: `<div style="background:#007AFF;color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;">${count}</div>`,
+              className: 'custom-cluster-icon',
+              iconSize: [30, 30]
+            });
+          }
+        });
+
+        // Add layers to map
+        this.busesCluster.addTo(this.map);
+        this.stopsCluster.addTo(this.map);
+        this.routeLayer.addTo(this.map);
+      }
+
+      createUserMarker() {
+        const userIcon = L.divIcon({
+          className: '',
+          html: '<div class="user-marker"><div class="user-marker-pulse"></div><div class="user-marker-inner"></div></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        this.userMarker = L.marker([this.state.center.latitude, this.state.center.longitude], { 
+          icon: userIcon 
+        });
+      }
+
+      setupEventListeners() {
+        // Map events
+        this.map.on('moveend', () => {
+          const center = this.map.getCenter();
+          const zoom = this.map.getZoom();
+          this.postMessage('centerChanged', { 
+            center: { lat: center.lat, lng: center.lng }, 
+            zoom 
+          });
+        });
+
+        this.map.on('zoomend', () => {
+          const zoom = this.map.getZoom();
+          this.postMessage('zoomChanged', { zoom });
+        });
+
+        // Handle bounds change for data fetching
+        this.map.on('moveend zoomend', () => {
+          const bounds = this.map.getBounds();
+          this.postMessage('boundsChanged', {
+            bounds: {
+              north: bounds.getNorth(),
+              south: bounds.getSouth(),
+              east: bounds.getEast(),
+              west: bounds.getWest()
+            }
+          });
+        });
+      }
+
+      // =================================================================
+      // PUBLIC API - Called from React Native
+      // =================================================================
+
+      setUserPosition(lat, lng, zoom) {
+        if (!this.userMarker) return;
+        
+        this.userMarker.setLatLng([lat, lng]);
+        const targetZoom = zoom || this.map.getZoom();
+        this.map.flyTo([lat, lng], targetZoom, { 
+          animate: true, 
+          duration: 0.8 
+        });
+        
+        if (this.userMarkerVisible && !this.map.hasLayer(this.userMarker)) {
+          this.userMarker.addTo(this.map);
+        }
+        
+        this.log('USER', `Position set to ${lat}, ${lng} (zoom: ${targetZoom})`);
+      }
+
+      setUserMarkerVisible(visible) {
+        this.userMarkerVisible = !!visible;
+        
+        if (this.userMarkerVisible) {
+          if (!this.map.hasLayer(this.userMarker)) {
+            this.userMarker.addTo(this.map);
+          }
+        } else {
+          if (this.map.hasLayer(this.userMarker)) {
+            this.map.removeLayer(this.userMarker);
+          }
+        }
+        
+        this.log('USER', `Marker visibility: ${this.userMarkerVisible}`);
+      }
+
+      recenterOnly(lat, lng, zoom) {
+        const targetZoom = zoom || this.map.getZoom();
+        this.map.flyTo([lat, lng], targetZoom, { 
+          animate: true, 
+          duration: 0.8 
+        });
+        this.log('MAP', `Recentered to ${lat}, ${lng} (zoom: ${targetZoom})`);
+      }
+
+      updateMapData(data) {
+        // console.log('[ModernBusMap] updateMapData called with:', data);
+        // console.log('[ModernBusMap] Data structure:', {
+        //   buses: data?.buses?.length || 0,
+        //   stops: data?.stops?.length || 0,
+        //   hasData: !!data,
+        //   dataKeys: data ? Object.keys(data) : []
+        // });
+        
+        this.state = { ...this.state, ...data };
+        
+        const buses = data.buses || [];
+        const stops = data.stops || [];
+        
+        // console.log('[ModernBusMap] About to render buses:', buses.length);
+        // console.log('[ModernBusMap] About to render stops:', stops.length);
+        
+        this.renderBuses(buses);
+        this.renderStops(stops);
+        
+        // this.log('DATA', `Updated: ${buses.length} buses, ${stops.length} stops`);
+      }
+
+      setBusRoute(lineCode) {
+        this.routeLayer.clearLayers();
+        
+        if (!lineCode) {
+          this.log('ROUTE', 'Route cleared');
+          return;
+        }
+        
+        // Request route data from React Native
+        this.postMessage('requestRoute', { lineCode });
+        this.log('ROUTE', `Requested route for line: ${lineCode}`);
+      }
+
+      drawRoute(routeData) {
+        this.routeLayer.clearLayers();
+        
+        if (!routeData || !routeData.coordinates) {
+          this.showToast('Rota não encontrada');
+          return;
+        }
+        
+        const route = L.polyline(routeData.coordinates, {
+          color: '#FF9500',
+          weight: 4,
+          opacity: 0.8
+        });
+        
+        route.addTo(this.routeLayer);
+        
+        // Fit map to route bounds
+        if (routeData.autoFit !== false) {
+          this.map.fitBounds(route.getBounds(), { padding: [20, 20] });
+        }
+        
+        this.log('ROUTE', `Route drawn with ${routeData.coordinates.length} points`);
+      }
+
+      // =================================================================
+      // DATA RENDERING
+      // =================================================================
+
+      renderBuses(buses) {
+        // console.log('[ModernBusMap] renderBuses called with:', buses.length, 'buses');
+        // console.log('[ModernBusMap] Bus sample:', buses[0]);
+        // console.log('[ModernBusMap] showBuses state:', this.state.showBuses);
+        
+        this.busesCluster.clearLayers();
+        
+        if (!this.state.showBuses || !buses.length) {
+          console.log('[ModernBusMap] Skipping bus rendering - showBuses:', this.state.showBuses, 'buses.length:', buses.length);
+          return;
+        }
+        
+        const filteredBuses = this.state.showOnlyActiveBuses 
+          ? buses.filter(bus => bus.linha && bus.linha.trim())
+          : buses;
+        
+        console.log('[ModernBusMap] Filtered buses:', filteredBuses.length);
+        
+        let renderedCount = 0;
+        filteredBuses.forEach(bus => {
+          if (!bus.geometry || !bus.geometry.coordinates) {
+            console.log('[ModernBusMap] Skipping bus without geometry:', bus);
+            return;
+          }
+          
+          const [lng, lat] = bus.geometry.coordinates;
+          const props = bus.properties || {};
+          
+          // console.log('[ModernBusMap] Rendering bus at:', lat, lng, 'props:', props);
+          
+          const isActive = !!(props.linha && props.linha.trim());
+          const busIcon = L.divIcon({
+            className: `bus-marker ${isActive ? 'active' : ''}`,
+            html: '🚌 bu',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          
+          const marker = L.marker([lat, lng], { icon: busIcon });
+          
+          // Create popup
+          const popupContent = this.createBusPopup(props);
+          marker.bindPopup(popupContent);
+          
+          // Handle popup events
+          marker.on('popupopen', () => {
+            this.postMessage('busClicked', { bus: props });
+            if (props.linha) {
+              this.setBusRoute(props.linha);
+            }
+          });
+          
+          this.busesCluster.addLayer(marker);
+          renderedCount++;
+        });
+        
+        console.log('[ModernBusMap] Successfully rendered', renderedCount, 'buses');
+        this.log('BUSES', `Rendered ${filteredBuses.length}/${buses.length} buses`);
+      }
+
+      renderStops(stops) {
+        // console.log('[ModernBusMap] renderStops called with:', stops.length, 'stops');
+        // console.log('[ModernBusMap] Stop sample:', stops[0]);
+        // console.log('[ModernBusMap] showStops state:', this.state.showStops);
+        
+        this.stopsCluster.clearLayers();
+        
+        if (!this.state.showStops || !stops.length) {
+          console.log('[ModernBusMap] Skipping stop rendering - showStops:', this.state.showStops, 'stops.length:', stops.length);
+          return;
+        }
+        
+        let renderedCount = 0;
+        stops.forEach(stop => {
+          if (!stop.geometry || !stop.geometry.coordinates) {
+            console.log('[ModernBusMap] Skipping stop without geometry:', stop);
+            return;
+          }
+          
+          const [lng, lat] = stop.geometry.coordinates;
+          const props = stop.properties || {};
+          
+          console.log('[ModernBusMap] Rendering stop at:', lat, lng, 'props:', props);
+          
+          const stopIcon = L.divIcon({
+            className: 'stop-marker',
+            html: '🚏',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          
+          const marker = L.marker([lat, lng], { icon: stopIcon });
+          
+          // Create popup
+          const popupContent = this.createStopPopup(props);
+          marker.bindPopup(popupContent);
+          
+          marker.on('popupopen', () => {
+            this.postMessage('stopClicked', { stop: props });
+          });
+          
+          this.stopsCluster.addLayer(marker);
+          renderedCount++;
+        });
+        
+        console.log('[ModernBusMap] Successfully rendered', renderedCount, 'stops');
+        this.log('STOPS', `Rendered ${stops.length} stops`);
+      }
+
+      // =================================================================
+      // POPUP CREATION
+      // =================================================================
+
+      createBusPopup(props) {
+        const linha = props.linha || 'N/A';
+        const veiculo = props.veiculo || props.cd_veiculo || 'N/A';
+        const velocidade = props.velocidade || 'N/A';
+        const timestamp = props.timestamp || props.data_hora || 'N/A';
+        
+        return `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-width: 200px;">
+            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">
+              🚌 Ônibus ${linha}
+            </h3>
+            <div style="font-size: 14px; line-height: 1.4;">
+              <p style="margin: 4px 0;"><strong>Veículo:</strong> ${veiculo}</p>
+              <p style="margin: 4px 0;"><strong>Velocidade:</strong> ${velocidade} km/h</p>
+              <p style="margin: 4px 0;"><strong>Última atualização:</strong> ${timestamp}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      createStopPopup(props) {
+        const nome = props.nome || props.name || 'Parada de Ônibus';
+        const codigo = props.codigo || props.code || 'N/A';
+        
+        return `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; min-width: 180px;">
+            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">
+              🚏 ${nome}
+            </h3>
+            <div style="font-size: 14px; line-height: 1.4;">
+              <p style="margin: 4px 0;"><strong>Código:</strong> ${codigo}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      // =================================================================
+      // UI HELPERS
+      // =================================================================
+
+      showLoading(text = 'Carregando...', progress = 0) {
+        const overlay = document.getElementById('loading-overlay');
+        const textEl = document.getElementById('loading-text');
+        const progressEl = document.getElementById('loading-progress');
+        
+        if (overlay && textEl && progressEl) {
+          textEl.textContent = text;
+          progressEl.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+          overlay.style.display = 'block';
+        }
+      }
+
+      hideLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+          overlay.style.display = 'none';
+        }
+      }
+
+      showToast(message, duration = 3000) {
+        const toast = document.getElementById('toast');
+        if (toast) {
+          toast.textContent = message;
+          toast.style.display = 'block';
+          
+          setTimeout(() => {
+            toast.style.display = 'none';
+          }, duration);
+        }
+      }
+
+      // =================================================================
+      // COMMUNICATION
+      // =================================================================
+
+      postMessage(type, data = {}) {
+        if (window.ReactNativeWebView) {
+          const message = { type, ...data, timestamp: Date.now() };
+          window.ReactNativeWebView.postMessage(JSON.stringify(message));
+        }
+      }
+
+      log(tag, message, extra = '') {
+        console.log(`[${tag}] ${message}`, extra);
+        this.postMessage('log', { tag, message, extra });
+      }
+
+      // =================================================================
+      // FETCH BRIDGE - Integration with React Native HTTP service
+      // =================================================================
+
+      setupFetchBridge() {
+        window.__pending = {};
+        window.__reqId = 1;
+
+        window.nativeFetch = (url) => {
+          const id = window.__reqId++;
+          return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              delete window.__pending[id];
+              reject(new Error('Request timeout'));
+            }, 15000);
+
+            window.__pending[id] = { resolve, reject, timeout };
+            this.postMessage('fetch', { id, url });
+          });
+        };
+
+        window.__deliverFetchResponse = (id, success, status, data) => {
+          const pending = window.__pending[id];
+          if (!pending) return;
+
+          clearTimeout(pending.timeout);
+          delete window.__pending[id];
+
+          if (success) {
+            try {
+              const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+              pending.resolve(parsed);
+            } catch (e) {
+              pending.reject(new Error('Invalid JSON response'));
+            }
+          } else {
+            pending.reject(new Error(`HTTP ${status}`));
+          }
+        };
+      }
+    }
+
+    // =================================================================
+    // INITIALIZATION
+    // =================================================================
+
+    let busMap;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      busMap = new ModernBusMap();
+      busMap.setupFetchBridge();
+      
+      // Expose global functions for React Native integration
+      window.setUserPosition = (lat, lng, zoom) => busMap.setUserPosition(lat, lng, zoom);
+      window.setUserMarkerVisible = (visible) => busMap.setUserMarkerVisible(visible);
+      window.recenterOnly = (lat, lng, zoom) => busMap.recenterOnly(lat, lng, zoom);
+      window.updateMapData = (data) => busMap.updateMapData(data);
+      window.setBusRoute = (lineCode) => busMap.setBusRoute(lineCode);
+      window.drawRoute = (routeData) => busMap.drawRoute(routeData);
+      window.showLoading = (text, progress) => busMap.showLoading(text, progress);
+      window.hideLoading = () => busMap.hideLoading();
+      window.showToast = (message, duration) => busMap.showToast(message, duration);
+    });
+  </script>
+</body>
+</html>

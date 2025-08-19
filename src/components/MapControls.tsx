@@ -5,9 +5,14 @@ import { useAppStore } from '../store';
 
 interface MapControlsProps {
   onLayerToggle?: (layer: string, enabled: boolean) => void;
+  mapRef: React.RefObject<MapHandleLike>;
 }
 
-const MapControls: React.FC<MapControlsProps> = ({ onLayerToggle }) => {
+type MapHandleLike = {
+  recenter: (lat: number, lng: number, zoom?: number) => void;
+};
+
+const MapControls: React.FC<MapControlsProps> = ({ onLayerToggle, mapRef }) => {
   const {
     showBuses,
     showStops,

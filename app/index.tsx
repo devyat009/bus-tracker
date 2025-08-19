@@ -1,84 +1,75 @@
+import MapControls from '@/src/components/MapControlsModern';
+import MapWebView, { MapWebViewHandle } from '@/src/components/MapWebView';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef } from "react";
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Map, { MapHandle } from "../src/components/Map";
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useLocation } from "../src/hooks/useLocation";
 import { useAppStore } from "../src/store";
 
 export default function Index() {
-  const mapRef = useRef<MapHandle>(null);
-  
-  // Use the new location hook
-  const { userLocation, getCurrentLocation, requestPermission, watchLocation } = useLocation();
-  
-  // Use the app store
-  const { 
-    setMapCenter, 
-    setMapZoom,
-    loading,
-    errors 
-  } = useAppStore();
+  const mapRef = useRef<MapWebViewHandle>(null);
 
-  
-  // Handle location button press
+  // Location hook
+  const { userLocation, getCurrentLocation, requestPermission } = useLocation();
+
+  // Store
+  const { setMapCenter, setMapZoom, loading } = useAppStore();
+
+  // Centralizar no usuário
   const handleLocatePress = async () => {
     try {
       const location = await getCurrentLocation();
       if (location && mapRef.current) {
-        // Update store and recenter map
         setMapCenter(location.latitude, location.longitude);
         setMapZoom(16);
-        mapRef.current.recenter(location.latitude, location.longitude, 16);
-        console.warn('recentered map to', location.latitude, location.longitude);
-      } else {
-        if (errors.location) {
-          Alert.alert('Erro de Localização', errors.location);
-        }
+        mapRef.current.recenter?.(location.latitude, location.longitude, 16);
+        mapRef.current.setUserMarkerVisible(true);
+        mapRef.current.showToast('Localização atualizada', 2000);
       }
     } catch (error) {
       console.error('Failed to get location:', error);
-      Alert.alert('Erro', 'Não foi possível obter sua localização');
     }
   };
 
-  // Request permission and start watching location on mount
+  // Solicitar permissão ao montar
   useEffect(() => {
     requestPermission();
   }, [requestPermission]);
 
-  // Handle map ready
+  // Map pronto
   const handleMapReady = () => {
-    console.log('Map component is ready');
     if (userLocation && mapRef.current) {
-      mapRef.current.recenter(userLocation.latitude, userLocation.longitude, 16);
+      mapRef.current.recenter?.(userLocation.latitude, userLocation.longitude, 16);
     }
   };
 
-  // Handle map errors
+  // Erro no mapa
   const handleMapError = (error: string) => {
     console.error('Map error:', error);
   };
-  
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>ÔnibusDF</Text>
       </View>
       <View style={styles.mapContainer}>
-        <Map 
+        <MapWebView
           ref={mapRef}
           onMapReady={handleMapReady}
           onMapError={handleMapError}
         />
-        <TouchableOpacity 
-          style={styles.locateButton} 
+        {/* Pass mapRef as MapWebViewHandle, not MapHandle */}
+        <MapControls mapRef={mapRef as any} />
+        <TouchableOpacity
+          style={styles.locateButton}
           onPress={handleLocatePress}
           disabled={loading.location}
         >
-          <Ionicons 
-            name={loading.location ? "hourglass" : "locate"} 
-            size={28} 
-            color={loading.location ? "#999" : "#007AFF"} 
+          <Ionicons
+            name={loading.location ? "hourglass" : "locate"}
+            size={28}
+            color={loading.location ? "#999" : "#007AFF"}
           />
         </TouchableOpacity>
       </View>

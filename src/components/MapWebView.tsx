@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useAutoRefresh, useDataFetching } from '../hooks/useDataFetching';
@@ -10,11 +10,29 @@ interface MapWebViewProps {
   onMapReady?: () => void;
   onMapError?: (error: string) => void;
 }
+export interface MapWebViewHandle {
+  recenter: (lat: number, lng: number, zoom?: number) => void;
+  showLoading: (text?: string, progress?: number) => void;
+  hideLoading: () => void;
+  showToast: (message: string, duration?: number) => void;
+  setUserPosition: (lat: number, lng: number, zoom?: number) => void;
+  setUserMarkerVisible: (visible: boolean) => void;
+  setBusRoute: (lineCode: string) => void;
+  // setRoute: (code: string) => void;
+  // fitToBounds: (bounds: MapBounds) => void;
+  // //getUserLocation: () => UserLocation | null;
+  // setUserPosition: (lat: number, lng: number, zoom?: number) => void;
+  // setUserMarkerVisible: (visible: boolean) => void;
+  // setBusRoute: (lineCode: string) => void;
+  // showLoading: (text?: string, progress?: number) => void;
+  // hideLoading: () => void;
+  // showToast: (message: string, duration?: number) => void;
+}
 
-const MapWebView: React.FC<MapWebViewProps> = ({
+const MapWebView = React.forwardRef<MapWebViewHandle, MapWebViewProps>(({
   onMapReady,
   onMapError,
-}) => {
+}, ref) => {
   const webViewRef = useRef<WebView>(null);
   const {
     style: mapStyle,
@@ -81,8 +99,8 @@ const MapWebView: React.FC<MapWebViewProps> = ({
         default:
           console.warn('Unknown message type from WebView:', message.type);
       }
-    } catch (error) {
-      console.error('Failed to parse WebView message:', error);
+    } catch {
+      console.error('Failed to parse WebView message:');
     }
   }, [onMapReady, onMapError, setMapCenter, setMapZoom]);
 
@@ -119,6 +137,9 @@ const MapWebView: React.FC<MapWebViewProps> = ({
   // Send data to WebView when it changes
   useEffect(() => {
     if (!webViewRef.current) return;
+    if (showBuses) {
+      fetchBuses();
+    }
 
     webViewRef.current.postMessage(JSON.stringify({
       type: 'updateData',
@@ -135,6 +156,54 @@ const MapWebView: React.FC<MapWebViewProps> = ({
       },
     }));
   }, [buses, stops, lines, userLocation, mapStyle, showBuses, showStops, showOnlyActiveBuses, selectedLines]);
+
+  useImperativeHandle(ref, () => ({
+    recenter: (lat: number, lng: number, zoomLevel?: number) => {
+      if (!webViewRef.current) return;
+      const targetZoom = zoomLevel ?? zoom;
+      const js = `
+        if (window.recenterOnly) {
+          window.recenterOnly(${lat}, ${lng}, ${targetZoom});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+
+      // Atualiza o estado global, se necessário
+      setMapCenter(lat, lng);
+      if (zoomLevel) setMapZoom(zoomLevel);
+    },
+    showLoading: (text?: string, progress?: number) => {
+      webViewRef.current?.injectJavaScript(`
+        if(window.showLoading){window.showLoading(${text ? JSON.stringify(text) : 'undefined'},${progress !== undefined ? progress : 'undefined'});} true;
+      `);
+    },
+    hideLoading: () => {
+      webViewRef.current?.injectJavaScript(`
+        if(window.hideLoading){window.hideLoading();} true;
+      `);
+    },
+    showToast: (message = '', duration = 2000) => {
+      webViewRef.current?.injectJavaScript(`
+        if(window.showToast){window.showToast(${JSON.stringify(message)},${duration});} true;
+      `);
+    },
+    setUserPosition: (lat, lng, zoom = 16) => {
+      webViewRef.current?.injectJavaScript(`
+        if(window.setUserPosition){window.setUserPosition(${lat},${lng},${zoom});} true;
+      `);
+    },
+    setUserMarkerVisible: (visible) => {
+      webViewRef.current?.injectJavaScript(`
+        if(window.setUserMarkerVisible){window.setUserMarkerVisible(${visible});} true;
+      `);
+    },
+    setBusRoute: (lineCode) => {
+      webViewRef.current?.injectJavaScript(`
+        if(window.setBusRoute){window.setBusRoute(${JSON.stringify(lineCode)});} true;
+      `);
+    },
+  }), [zoom, setMapCenter, setMapZoom]);
 
   // Initialize data fetching
   useEffect(() => {
@@ -265,7 +334,7 @@ const MapWebView: React.FC<MapWebViewProps> = ({
       />
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -275,5 +344,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+MapWebView.displayName = 'MapWebView';
 
 export default MapWebView;
