@@ -32,7 +32,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const DeveloperOptions = () => {
-  const theme = useAppStore(state => state.style);
+  const appTheme = useAppStore(state => state.appTheme);
   const [expanded, setExpanded] = useState(false);
   const [results, setResults] = useState<Partial<Record<UrlKey, 'success' | 'error' | 'loading'>>>({});
   const [logs, setLogs] = useState<Partial<Record<UrlKey, string>>>({});
@@ -86,13 +86,13 @@ const DeveloperOptions = () => {
   };
 
   return (
-    <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#111' : '#f7f7f7' }]}>
+    <View style={[styles.section, { backgroundColor: appTheme === 'dark' ? '#111' : '#f7f7f7' }]}>
       <TouchableOpacity style={styles.headerRow} onPress={toggleExpand} activeOpacity={0.7}>
-        <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#fff' : '#000' }]}>Opções de Desenvolvedor</Text>
+        <Text style={[styles.sectionTitle, { color: appTheme === 'dark' ? '#fff' : '#000' }]}>Opções de Desenvolvedor</Text>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={24}
-          color={theme === 'dark' ? '#fff' : '#333'}
+          color={appTheme === 'dark' ? '#fff' : '#333'}
           style={styles.chevron}
         />
       </TouchableOpacity>
@@ -107,7 +107,7 @@ const DeveloperOptions = () => {
                 <Text style={styles.buttonText}>{label}</Text>
               </TouchableOpacity>
               <Text style={{ 
-                color: results[key] === 'success' ? 'green' : results[key] === 'error' ? 'red' : (theme === 'dark' ? '#ccc' : '#888'), 
+                color: results[key] === 'success' ? 'green' : results[key] === 'error' ? 'red' : (appTheme === 'dark' ? '#ccc' : '#888'), 
                 marginLeft: 8 
               }}>
                 {results[key] === 'success' && 'OK'}
@@ -116,12 +116,12 @@ const DeveloperOptions = () => {
               </Text>
               {results[key] === 'error' && (
                 <TouchableOpacity onPress={() => alert(logs[key])}>
-                  <Text style={[styles.logLink, { color: theme === 'dark' ? '#ff6b6b' : '#c30505' }]}>Ver log</Text>
+                  <Text style={[styles.logLink, { color: appTheme === 'dark' ? '#ff6b6b' : '#c30505' }]}>Ver log</Text>
                 </TouchableOpacity>
               )}
               {results[key] === 'success' && previewData[key] && (
                 <TouchableOpacity onPress={() => setShowPreview({ key, visible: true })}>
-                  <Text style={[styles.logLink, { color: theme === 'dark' ? '#ff6b6b' : '#c30505' }]}>Preview</Text>
+                  <Text style={[styles.logLink, { color: appTheme === 'dark' ? '#ff6b6b' : '#c30505' }]}>Preview</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -137,19 +137,19 @@ const DeveloperOptions = () => {
         onRequestClose={() => setShowPreview({ key: null, visible: false })}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#222' : '#fff' }]}>
-            <Text style={[styles.modalTitle, { color: theme === 'dark' ? '#fff' : '#000' }]}>{getPreviewTitle(showPreview.key)}</Text>
+          <View style={[styles.modalContent, { backgroundColor: appTheme === 'dark' ? '#222' : '#fff' }]}>
+            <Text style={[styles.modalTitle, { color: appTheme === 'dark' ? '#fff' : '#000' }]}>{getPreviewTitle(showPreview.key)}</Text>
             <ScrollView style={{ maxHeight: 400 }}>
               {previewData[showPreview.key as UrlKey]?.features?.slice(0, 10).map((feature: any, idx: number) => (
-                <View key={idx} style={[styles.featureBox, { backgroundColor: theme === 'dark' ? '#333' : '#f3f3f3' }]}>
-                  <Text style={[styles.featureTitle, { color: theme === 'dark' ? '#fff' : '#000' }]}>{`${getPreviewTitle(showPreview.key).replace('Preview ', '')} #${idx + 1}`}</Text>
-                  <Text style={[styles.featureText, { color: theme === 'dark' ? '#ccc' : '#222' }]}>
+                <View key={idx} style={[styles.featureBox, { backgroundColor: appTheme === 'dark' ? '#333' : '#f3f3f3' }]}>
+                  <Text style={[styles.featureTitle, { color: appTheme === 'dark' ? '#fff' : '#000' }]}>{`${getPreviewTitle(showPreview.key).replace('Preview ', '')} #${idx + 1}`}</Text>
+                  <Text style={[styles.featureText, { color: appTheme === 'dark' ? '#ccc' : '#222' }]}>
                     {JSON.stringify(feature.properties, null, 2)}
                   </Text>
                 </View>
               ))}
               {!previewData[showPreview.key as UrlKey]?.features?.length && (
-                <Text style={[styles.featureText, { color: theme === 'dark' ? '#ccc' : '#222' }]}>Nenhum dado encontrado.</Text>
+                <Text style={[styles.featureText, { color: appTheme === 'dark' ? '#ccc' : '#222' }]}>Nenhum dado encontrado.</Text>
               )}
             </ScrollView>
             <Pressable style={styles.closeButton} onPress={() => setShowPreview({ key: null, visible: false })}>

@@ -1,9 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { Bus, BusLine, BusStop, MapState, MapStyle, UserLocation } from '../types';
+import { AppTheme, Bus, BusLine, BusStop, MapState, MapStyle, UserLocation } from '../types';
 
 interface AppState extends MapState {
+  // App theme (separate from map theme)
+  appTheme: AppTheme;
+  
   // Data state
   buses: Bus[];
   stops: BusStop[];
@@ -37,6 +40,7 @@ interface AppState extends MapState {
   setMapCenter: (latitude: number, longitude: number) => void;
   setMapZoom: (zoom: number) => void;
   setMapStyle: (style: MapStyle) => void;
+  setAppTheme: (theme: AppTheme) => void;
   setShowBuses: (show: boolean) => void;
   setShowStops: (show: boolean) => void;
   setShowOnlyActiveBuses: (show: boolean) => void;
@@ -57,6 +61,9 @@ interface AppState extends MapState {
 }
 
 const initialState = {
+  // App theme
+  appTheme: 'light' as AppTheme,
+  
   // Map state
   center: {
     latitude: -15.793782954386705,
@@ -115,6 +122,9 @@ export const useAppStore = create<AppState>()(
       
       setMapStyle: (style) =>
         set({ style }),
+      
+      setAppTheme: (appTheme) =>
+        set({ appTheme }),
       
       setShowBuses: (showBuses) =>
         set({ showBuses }),

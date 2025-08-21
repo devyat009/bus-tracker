@@ -58,6 +58,8 @@ export type MapStyle =
   | 'stadia_dark' 
   | 'stadia_bright';
 
+export type AppTheme = 'light' | 'dark';
+
 export interface UserLocation {
   latitude: number;
   longitude: number;

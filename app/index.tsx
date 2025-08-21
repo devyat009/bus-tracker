@@ -15,7 +15,7 @@ export default function Index() {
   const [buses, setBuses] = useState<any[]>([]);
   // Store
   //const { setMapCenter, setMapZoom, loading } = useAppStore();
-  const { loading, style: theme } = useAppStore();
+  const { loading, style: mapTheme, appTheme } = useAppStore();
 
   // Map center state
   const [mapCenter, setMapCenter] = useState({
@@ -125,9 +125,9 @@ export default function Index() {
   }, [bounds]);
   
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme === 'dark' ? '#000' : '#fff' }]}>
-      <View style={[styles.header, { backgroundColor: theme === 'dark' ? '#000' : '#fff' }]}>
-        <Text style={[styles.title, { color: theme === 'dark' ? '#fff' : '#333' }]}>ÔnibusDF</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: appTheme === 'dark' ? '#000' : '#fff' }]}>
+      <View style={[styles.header, { backgroundColor: appTheme === 'dark' ? '#000' : '#fff' }]}>
+        <Text style={[styles.title, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>ÔnibusDF</Text>
       </View>
       <View style={styles.mapContainer}>
         <MapLibreBasic
@@ -135,7 +135,7 @@ export default function Index() {
           longitude={cameraMode === 'auto' ? mapCenter.longitude : undefined}
           zoom={cameraMode === 'auto' ? mapCenter.zoom : undefined}
           style={{ flex: 1 }}
-          theme={theme as 'light' | 'dark'} // Usar tema do store
+          theme={mapTheme as 'light' | 'dark'} // Usar tema do mapa do store
           // Paradas de onibus
           busStopMarker={stops.map(stop => ({
             id: stop.id,
@@ -151,7 +151,7 @@ export default function Index() {
           onBusMarkerPress={bus => Alert.alert('Ônibus', bus.title || bus.id)}
         />
         <TouchableOpacity
-          style={[styles.locateButton, { backgroundColor: theme === 'dark' ? '#333' : '#fff' }]}
+          style={[styles.locateButton, { backgroundColor: appTheme === 'dark' ? '#333' : '#fff' }]}
           onPress={handleLocatePress}
           disabled={loading.location}
         >

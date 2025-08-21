@@ -62,7 +62,8 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   onBusMarkerPress,
   buses = [],
 }) => {
-  const theme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
+  const mapTheme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
+  const appTheme = useAppStore(state => state.appTheme);
   const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
   const [selectedBus, setSelectedBus] = useState<BusMarker | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -121,7 +122,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
     <View style={[styles.container, style]}>
       <MapView
         style={{ flex: 1 }}
-        mapStyle={mapStyles[theme] || mapStyles.light}
+        mapStyle={mapStyles[mapTheme] || mapStyles.light}
         onRegionDidChange={handleRegionDidChange}
       >
         {latitude !== undefined && longitude !== undefined && zoom !== undefined ? (
@@ -192,27 +193,27 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
         <Animated.View style={[
           styles.customPopup, 
           { opacity: fadeAnim },
-          { backgroundColor: theme === 'dark' ? '#333' : 'white' }
+          { backgroundColor: appTheme === 'dark' ? '#333' : 'white' }
         ]}>
           <View style={styles.popupContent}>
-            <Text style={[styles.popupTitle, { color: theme === 'dark' ? '#fff' : '#333' }]}>
+            <Text style={[styles.popupTitle, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>
               Linha {selectedBus.linha}
             </Text>
-            <Text style={[styles.popupSubtitle, { color: theme === 'dark' ? '#ccc' : '#666' }]}>
+            <Text style={[styles.popupSubtitle, { color: appTheme === 'dark' ? '#ccc' : '#666' }]}>
               Prefixo: {selectedBus.prefixo}
             </Text>
             {selectedBus.velocidade && (
-              <Text style={[styles.popupInfo, { color: theme === 'dark' ? '#ddd' : '#444' }]}>
+              <Text style={[styles.popupInfo, { color: appTheme === 'dark' ? '#ddd' : '#444' }]}>
                 Velocidade: {selectedBus.velocidade.toFixed(1)} km/h
               </Text>
             )}
             {selectedBus.sentido && (
-              <Text style={[styles.popupInfo, { color: theme === 'dark' ? '#ddd' : '#444' }]}>
+              <Text style={[styles.popupInfo, { color: appTheme === 'dark' ? '#ddd' : '#444' }]}>
                 Sentido: {selectedBus.sentido === '1' ? 'Ida' : selectedBus.sentido === '2' ? 'Volta' : selectedBus.sentido}
               </Text>
             )}
             {selectedBus.datalocal && (
-              <Text style={[styles.popupTimestamp, { color: theme === 'dark' ? '#aaa' : '#888' }]}>
+              <Text style={[styles.popupTimestamp, { color: appTheme === 'dark' ? '#aaa' : '#888' }]}>
                 Atualizado: {new Date(selectedBus.datalocal).toLocaleTimeString('pt-BR')}
               </Text>
             )}
