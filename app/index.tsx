@@ -12,6 +12,7 @@ export default function Index() {
   // Api Service
   const [bounds, setBounds] = useState<any>(null);
   const [stops, setStops] = useState<any[]>([]);
+  const [buses, setBuses] = useState<any[]>([]);
   // Store
   //const { setMapCenter, setMapZoom, loading } = useAppStore();
   const { loading } = useAppStore();
@@ -69,7 +70,8 @@ export default function Index() {
       console.error('Failed to get location:', error);
     }
   };
-
+  
+  // Atualiza os bounds quando move o mapa
   const handleRegionDidChange = (
     bounds: { north: number; south: number; east: number; west: number; },
     center?: { latitude: number; longitude: number },
@@ -80,13 +82,6 @@ export default function Index() {
       setCameraMode('free');
       console.warn('camera mode changed to free');
     }
-    // if (center && zoom !== undefined) {
-    //   setMapCenter({
-    //     latitude: center.latitude,
-    //     longitude: center.longitude,
-    //     zoom,
-    //   });
-    // }
   };
 
   // Buscar paradas ao mudar os bounds
@@ -100,6 +95,30 @@ export default function Index() {
       });
   }, [bounds]);
 
+  // Buscar os onibus
+  useEffect(() => {
+    let interval: number;
+    const fetchBuses = async () => {
+      if (!bounds) return;
+      try {
+        const result = await apiService.getBuses(bounds);
+        setBuses(result.map(bus => ({
+          id: bus.id,
+          latitude: bus.latitude,
+          longitude: bus.longitude,
+          title: bus.linha,
+        })));
+      } catch (error) {
+        console.error('Erro ao buscar ônibus', error);
+      }
+    };
+
+    fetchBuses();
+    interval = setInterval(fetchBuses, 8000); // Atualiza a cada 8 segundos
+
+    return () => clearInterval(interval);
+  }, [bounds]);
+  
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -112,14 +131,19 @@ export default function Index() {
           zoom={cameraMode === 'auto' ? mapCenter.zoom : undefined}
           style={{ flex: 1 }}
           theme='dark' // light,
+          // Paradas de onibus
           busStopMarker={stops.map(stop => ({
             id: stop.id,
             latitude: stop.latitude,
             longitude: stop.longitude,
             title: stop.nome,
           }))}
-          onBusMarkerPress={marker => Alert.alert('Parada', marker.title || marker.id)}
+          onBusStopMarkerPress={marker => Alert.alert('Parada', marker.title || marker.id)}
+          // Map change
           onRegionDidChange={handleRegionDidChange}
+          // Onibus
+          buses={buses}
+          onBusMarkerPress={bus => Alert.alert('Ônibus', bus.title || bus.id)}
         />
         <TouchableOpacity
           style={styles.locateButton}

@@ -14,6 +14,14 @@ interface BusStopMarker {
   longitude: number;
   title?: string;
 }
+
+interface BusMarker {
+  id: string;
+  latitude: number;
+  longitude: number;
+  title?: string;
+}
+
 interface MapLibreBasicProps {
   latitude?: number;
   longitude?: number;
@@ -21,8 +29,11 @@ interface MapLibreBasicProps {
   style?: object;
   theme?: 'light' | 'dark';
   onRegionDidChange?: (bounds: {north: number, south: number, east: number, west: number}, center?: {latitude: number, longitude: number}, zoom?: number) => void;
-  onBusMarkerPress?: (busStopMarker: BusStopMarker) => void;
+  onBusStopMarkerPress?: (busStopMarker: BusStopMarker) => void;
   busStopMarker?: BusStopMarker[];
+
+  buses?: BusMarker[];
+  onBusMarkerPress?: (bus: BusMarker) => void;
 }
 
 const mapStyles = {
@@ -37,8 +48,14 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   zoom,
   style = {},
   onRegionDidChange,
+
+  // Paradas de onibus
   busStopMarker = [],
+  onBusStopMarkerPress,
+
+  // Onibus
   onBusMarkerPress,
+  buses = [],
 }) => {
   const theme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
   const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
@@ -88,7 +105,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
             key={busStop.id}
             id={busStop.id}
             coordinate={[busStop.longitude, busStop.latitude]}
-            onSelected={() => onBusMarkerPress?.(busStop)}
+            onSelected={() => onBusStopMarkerPress?.(busStop)}
           >
           <View style={{
               width: 18,
@@ -99,6 +116,27 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
               borderColor: '#fff'
             }}
           />
+          </PointAnnotation>
+        ))}
+        {currentZoom >= 11 && buses && buses.map((bus: BusMarker) => (
+          <PointAnnotation
+            key={bus.id}
+            id={bus.id}
+            coordinate={[bus.longitude, bus.latitude]}
+            onSelected={() => onBusMarkerPress?.(bus)}
+          >
+            <View style={{
+              width: 16,
+              height: 16,
+              backgroundColor: '#FFD600',
+              borderRadius: 8,
+              borderWidth: 2,
+              borderColor: '#333',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}>
+              {/* Você pode customizar o ícone do ônibus aqui */}
+            </View>
           </PointAnnotation>
         ))}
       </MapView>
