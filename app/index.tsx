@@ -15,11 +15,38 @@ export default function Index() {
   // Store
   //const { setMapCenter, setMapZoom, loading } = useAppStore();
   const { loading } = useAppStore();
+
+  // Map center state
   const [mapCenter, setMapCenter] = useState({
-    latitude: userLocation?.latitude ?? -15.793889,
-    longitude: userLocation?.longitude ?? -47.882778,
+    latitude: -15.793889,
+    longitude: -47.882778,
     zoom: 12,
   });
+
+  // Map initialization state
+  const [initialized, setInitialized] = useState(false);
+
+  // Map Camera
+  const [cameraMode, setCameraMode] = useState<'auto' | 'free'>('auto');
+
+  // Solicitar permissão ao montar
+  useEffect(() => {
+    requestPermission();
+  }, [requestPermission]);
+
+  // Centralizar no usuário ao iniciar
+  useEffect(() => {
+    if (userLocation) {
+      setMapCenter({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        zoom: 16,
+      });
+      setCameraMode('auto');
+      setInitialized(true);
+    }
+  }, [userLocation, initialized]);
+
   // Centralizar no usuário
   const handleLocatePress = async () => {
     try {
@@ -35,15 +62,32 @@ export default function Index() {
           longitude: location.longitude,
           zoom: 16,
         });
+        setCameraMode('auto');
+        console.warn('camera mode changed to auto');
       }
     } catch (error) {
       console.error('Failed to get location:', error);
     }
   };
-  // Solicitar permissão ao montar
-  useEffect(() => {
-    requestPermission();
-  }, [requestPermission]);
+
+  const handleRegionDidChange = (
+    bounds: { north: number; south: number; east: number; west: number; },
+    center?: { latitude: number; longitude: number },
+    zoom?: number
+  ) => {
+    setBounds(bounds);
+    if (cameraMode === 'auto') {
+      setCameraMode('free');
+      console.warn('camera mode changed to free');
+    }
+    // if (center && zoom !== undefined) {
+    //   setMapCenter({
+    //     latitude: center.latitude,
+    //     longitude: center.longitude,
+    //     zoom,
+    //   });
+    // }
+  };
 
   // Buscar paradas ao mudar os bounds
   useEffect(() => {
@@ -75,7 +119,7 @@ export default function Index() {
             title: stop.nome,
           }))}
           onBusMarkerPress={marker => Alert.alert('Parada', marker.title || marker.id)}
-          onRegionDidChange={setBounds}
+          onRegionDidChange={handleRegionDidChange}
         />
         <TouchableOpacity
           style={styles.locateButton}

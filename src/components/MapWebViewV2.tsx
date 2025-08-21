@@ -20,7 +20,7 @@ interface MapLibreBasicProps {
   zoom?: number;
   style?: object;
   theme?: 'light' | 'dark';
-  onRegionDidChange?: (bounds: {north: number, south: number, east: number, west: number}) => void;
+  onRegionDidChange?: (bounds: {north: number, south: number, east: number, west: number}, center?: {latitude: number, longitude: number}, zoom?: number) => void;
   onBusMarkerPress?: (busStopMarker: BusStopMarker) => void;
   busStopMarker?: BusStopMarker[];
 }
@@ -45,7 +45,13 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   const handleRegionDidChange = async (event: any) => {
     if (onRegionDidChange && event && event.properties && event.properties.visibleBounds) {
       const [[west, south], [east, north]] = event.properties.visibleBounds;
-      onRegionDidChange({ north, south, east, west });
+      // Extrai centro e zoom do evento
+      const center = event.geometry?.coordinates
+        ? { longitude: event.geometry.coordinates[0], latitude: event.geometry.coordinates[1] }
+        : undefined;
+      const zoom = event.properties.zoomLevel;
+      onRegionDidChange({ north, south, east, west }, center, zoom);
+      
     }
   };
   
@@ -64,7 +70,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
           visible={true}
           showsUserHeadingIndicator={true}
         />
-        {busStopMarker.map((busStop: BusStopMarker) => (
+        {zoom >= 12 && busStopMarker.map((busStop: BusStopMarker) => (
           <PointAnnotation
             key={busStop.id}
             id={busStop.id}
