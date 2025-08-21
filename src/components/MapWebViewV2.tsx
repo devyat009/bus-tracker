@@ -106,6 +106,15 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
         duration: 300,
         useNativeDriver: true,
       }).start();
+      
+      // Auto fade-out após 5 segundos
+      setTimeout(() => {
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => setSelectedBus(null));
+      }, 5000);
     }
   };
   
