@@ -52,6 +52,8 @@ export interface MapState {
 }
 
 export type MapStyle = 
+  | 'light'
+  | 'dark'
   | 'osm' 
   | 'stadia_dark' 
   | 'stadia_bright';

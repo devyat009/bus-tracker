@@ -15,7 +15,7 @@ export default function Index() {
   const [buses, setBuses] = useState<any[]>([]);
   // Store
   //const { setMapCenter, setMapZoom, loading } = useAppStore();
-  const { loading } = useAppStore();
+  const { loading, style: theme } = useAppStore();
 
   // Map center state
   const [mapCenter, setMapCenter] = useState({
@@ -125,9 +125,9 @@ export default function Index() {
   }, [bounds]);
   
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>ÔnibusDF</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme === 'dark' ? '#000' : '#fff' }]}>
+      <View style={[styles.header, { backgroundColor: theme === 'dark' ? '#000' : '#fff' }]}>
+        <Text style={[styles.title, { color: theme === 'dark' ? '#fff' : '#333' }]}>ÔnibusDF</Text>
       </View>
       <View style={styles.mapContainer}>
         <MapLibreBasic
@@ -135,7 +135,7 @@ export default function Index() {
           longitude={cameraMode === 'auto' ? mapCenter.longitude : undefined}
           zoom={cameraMode === 'auto' ? mapCenter.zoom : undefined}
           style={{ flex: 1 }}
-          theme='dark' // light,
+          theme={theme as 'light' | 'dark'} // Usar tema do store
           // Paradas de onibus
           busStopMarker={stops.map(stop => ({
             id: stop.id,
@@ -151,7 +151,7 @@ export default function Index() {
           onBusMarkerPress={bus => Alert.alert('Ônibus', bus.title || bus.id)}
         />
         <TouchableOpacity
-          style={styles.locateButton}
+          style={[styles.locateButton, { backgroundColor: theme === 'dark' ? '#333' : '#fff' }]}
           onPress={handleLocatePress}
           disabled={loading.location}
         >
@@ -169,11 +169,9 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffffff',
   },
   header: {
     padding: 15,
-    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
@@ -182,7 +180,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    color: '#333333',
   },
   mapContainer: {
     flex: 1,
@@ -192,7 +189,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 24,
     right: 24,
-    backgroundColor: '#fff',
     borderRadius: 24,
     width: 48,
     height: 48,

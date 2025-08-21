@@ -91,7 +91,6 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
 
   // Manipulao ao selecionar um onibus
   const handleBusSelect = (bus: BusMarker) => {
-    console.log('Bus select:', bus.id);
     if (selectedBus?.id === bus.id) {
       // Fade out
       Animated.timing(fadeAnim, {
@@ -174,8 +173,8 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
               backgroundColor: 'transparent',
             }}>
               <View style={{
-                width: 27,
-                height: 27,
+                width: 30,
+                height: 30,
                 backgroundColor: '#FFD600',
                 borderRadius: 13.5,
                 borderWidth: 2,
@@ -190,26 +189,30 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
       
       {/* Popup customizado fora do mapa */}
       {selectedBus && (
-        <Animated.View style={[styles.customPopup, { opacity: fadeAnim }]}>
+        <Animated.View style={[
+          styles.customPopup, 
+          { opacity: fadeAnim },
+          { backgroundColor: theme === 'dark' ? '#333' : 'white' }
+        ]}>
           <View style={styles.popupContent}>
-            <Text style={styles.popupTitle}>
+            <Text style={[styles.popupTitle, { color: theme === 'dark' ? '#fff' : '#333' }]}>
               Linha {selectedBus.linha}
             </Text>
-            <Text style={styles.popupSubtitle}>
+            <Text style={[styles.popupSubtitle, { color: theme === 'dark' ? '#ccc' : '#666' }]}>
               Prefixo: {selectedBus.prefixo}
             </Text>
             {selectedBus.velocidade && (
-              <Text style={styles.popupInfo}>
+              <Text style={[styles.popupInfo, { color: theme === 'dark' ? '#ddd' : '#444' }]}>
                 Velocidade: {selectedBus.velocidade.toFixed(1)} km/h
               </Text>
             )}
             {selectedBus.sentido && (
-              <Text style={styles.popupInfo}>
+              <Text style={[styles.popupInfo, { color: theme === 'dark' ? '#ddd' : '#444' }]}>
                 Sentido: {selectedBus.sentido === '1' ? 'Ida' : selectedBus.sentido === '2' ? 'Volta' : selectedBus.sentido}
               </Text>
             )}
             {selectedBus.datalocal && (
-              <Text style={styles.popupTimestamp}>
+              <Text style={[styles.popupTimestamp, { color: theme === 'dark' ? '#aaa' : '#888' }]}>
                 Atualizado: {new Date(selectedBus.datalocal).toLocaleTimeString('pt-BR')}
               </Text>
             )}
@@ -232,7 +235,6 @@ const styles = StyleSheet.create({
     top: 20,
     left: 20,
     right: 20,
-    backgroundColor: 'white',
     borderRadius: 8,
     elevation: 5,
     shadowColor: '#000',
@@ -246,21 +248,17 @@ const styles = StyleSheet.create({
   popupTitle: {
     fontWeight: 'bold',
     fontSize: 16,
-    color: '#333',
   },
   popupSubtitle: {
     fontSize: 12,
-    color: '#666',
     marginTop: 4,
   },
   popupInfo: {
     fontSize: 12,
-    color: '#444',
     marginTop: 2,
   },
   popupTimestamp: {
     fontSize: 10,
-    color: '#888',
     marginTop: 4,
     fontStyle: 'italic',
   },

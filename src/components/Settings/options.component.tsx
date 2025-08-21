@@ -5,7 +5,7 @@ import { useAppStore } from '../../store';
 
 const SettingsOptions = () => {
   const [expanded, setExpanded] = useState(false);
-    const theme = useAppStore(state => state.style); // 'light' | 'dark' | 'osm'...
+  const theme = useAppStore(state => state.style); // 'light' | 'dark' | 'osm'...
   const setTheme = useAppStore(state => state.setMapStyle);
 
   const toggleExpand = () => {
@@ -19,16 +19,19 @@ const SettingsOptions = () => {
 
   return (
     <View>
-      <TouchableOpacity onPress={toggleExpand} style={styles.option}>
-        <Text style={styles.optionText}>Tema do Mapa</Text>
+      <TouchableOpacity onPress={toggleExpand} style={[styles.option, { 
+        borderBottomColor: theme === 'dark' ? '#333' : '#eee',
+        backgroundColor: theme === 'dark' ? '#000' : '#fff' 
+      }]}>
+        <Text style={[styles.optionText, { color: theme === 'dark' ? '#fff' : '#333' }]}>Tema do Mapa</Text>
         <Ionicons
           name={expanded ? "chevron-up" : "chevron-down"}
           size={24}
-          color="#666"
+          color={theme === 'dark' ? '#ccc' : '#666'}
         />
       </TouchableOpacity>
       {expanded && (
-        <View style={styles.expandedContent}>
+        <View style={[styles.expandedContent, { backgroundColor: theme === 'dark' ? '#111' : '#f9f9f9' }]}>
           <TouchableOpacity
             style={[styles.themeToggle, theme === 'light' && styles.themeActive]}
             onPress={() => handleThemeChange('light')}
@@ -38,7 +41,7 @@ const SettingsOptions = () => {
               size={20}
               color={theme === 'light' ? "#007AFF" : "#999"}
             />
-            <Text style={styles.themeText}>Claro</Text>
+            <Text style={[styles.themeText, { color: theme === 'dark' ? '#fff' : '#333' }]}>Claro</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.themeToggle, theme === 'dark' && styles.themeActive]}
@@ -49,7 +52,7 @@ const SettingsOptions = () => {
               size={20}
               color={theme === 'dark' ? "#007AFF" : "#999"}
             />
-            <Text style={styles.themeText}>Escuro</Text>
+            <Text style={[styles.themeText, { color: theme === 'dark' ? '#fff' : '#333' }]}>Escuro</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -61,18 +64,15 @@ const styles = StyleSheet.create({
   option: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   optionText: {
     fontSize: 16,
-    color: "#333",
   },
   expandedContent: {
     padding: 12,
-    backgroundColor: "#f9f9f9",
   },
   themeToggle: {
     flexDirection: "row",
@@ -86,7 +86,6 @@ const styles = StyleSheet.create({
   themeText: {
     marginLeft: 10,
     fontSize: 16,
-    color: "#333",
   },
 });
 

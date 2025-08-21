@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { LayoutAnimation, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
+import { useAppStore } from '../../src/store';
 
 type UrlKey = 'buses' | 'stops' | 'lines';
 interface UrlItem {
@@ -31,6 +32,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const DeveloperOptions = () => {
+  const theme = useAppStore(state => state.style);
   const [expanded, setExpanded] = useState(false);
   const [results, setResults] = useState<Partial<Record<UrlKey, 'success' | 'error' | 'loading'>>>({});
   const [logs, setLogs] = useState<Partial<Record<UrlKey, string>>>({});
@@ -84,13 +86,13 @@ const DeveloperOptions = () => {
   };
 
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#111' : '#f7f7f7' }]}>
       <TouchableOpacity style={styles.headerRow} onPress={toggleExpand} activeOpacity={0.7}>
-        <Text style={styles.sectionTitle}>Opções de Desenvolvedor</Text>
+        <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#fff' : '#000' }]}>Opções de Desenvolvedor</Text>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={24}
-          color="#333"
+          color={theme === 'dark' ? '#fff' : '#333'}
           style={styles.chevron}
         />
       </TouchableOpacity>
@@ -104,19 +106,22 @@ const DeveloperOptions = () => {
               >
                 <Text style={styles.buttonText}>{label}</Text>
               </TouchableOpacity>
-              <Text style={{ color: results[key] === 'success' ? 'green' : results[key] === 'error' ? 'red' : '#888', marginLeft: 8 }}>
+              <Text style={{ 
+                color: results[key] === 'success' ? 'green' : results[key] === 'error' ? 'red' : (theme === 'dark' ? '#ccc' : '#888'), 
+                marginLeft: 8 
+              }}>
                 {results[key] === 'success' && 'OK'}
                 {results[key] === 'error' && 'Erro'}
                 {results[key] === 'loading' && '...'}
               </Text>
               {results[key] === 'error' && (
                 <TouchableOpacity onPress={() => alert(logs[key])}>
-                  <Text style={styles.logLink}>Ver log</Text>
+                  <Text style={[styles.logLink, { color: theme === 'dark' ? '#ff6b6b' : '#c30505' }]}>Ver log</Text>
                 </TouchableOpacity>
               )}
               {results[key] === 'success' && previewData[key] && (
                 <TouchableOpacity onPress={() => setShowPreview({ key, visible: true })}>
-                  <Text style={styles.logLink}>Preview</Text>
+                  <Text style={[styles.logLink, { color: theme === 'dark' ? '#ff6b6b' : '#c30505' }]}>Preview</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -132,19 +137,19 @@ const DeveloperOptions = () => {
         onRequestClose={() => setShowPreview({ key: null, visible: false })}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{getPreviewTitle(showPreview.key)}</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#222' : '#fff' }]}>
+            <Text style={[styles.modalTitle, { color: theme === 'dark' ? '#fff' : '#000' }]}>{getPreviewTitle(showPreview.key)}</Text>
             <ScrollView style={{ maxHeight: 400 }}>
               {previewData[showPreview.key as UrlKey]?.features?.slice(0, 10).map((feature: any, idx: number) => (
-                <View key={idx} style={styles.featureBox}>
-                  <Text style={styles.featureTitle}>{`${getPreviewTitle(showPreview.key).replace('Preview ', '')} #${idx + 1}`}</Text>
-                  <Text style={styles.featureText}>
+                <View key={idx} style={[styles.featureBox, { backgroundColor: theme === 'dark' ? '#333' : '#f3f3f3' }]}>
+                  <Text style={[styles.featureTitle, { color: theme === 'dark' ? '#fff' : '#000' }]}>{`${getPreviewTitle(showPreview.key).replace('Preview ', '')} #${idx + 1}`}</Text>
+                  <Text style={[styles.featureText, { color: theme === 'dark' ? '#ccc' : '#222' }]}>
                     {JSON.stringify(feature.properties, null, 2)}
                   </Text>
                 </View>
               ))}
               {!previewData[showPreview.key as UrlKey]?.features?.length && (
-                <Text style={styles.featureText}>Nenhum dado encontrado.</Text>
+                <Text style={[styles.featureText, { color: theme === 'dark' ? '#ccc' : '#222' }]}>Nenhum dado encontrado.</Text>
               )}
             </ScrollView>
             <Pressable style={styles.closeButton} onPress={() => setShowPreview({ key: null, visible: false })}>
@@ -161,7 +166,6 @@ const styles = StyleSheet.create({
   section: {
     marginTop: 32,
     padding: 16,
-    backgroundColor: '#f7f7f7',
     borderRadius: 10,
   },
   headerRow: {
@@ -193,7 +197,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   logLink: {
-    color: '#c30505',
     marginLeft: 10,
     textDecorationLine: 'underline',
   },
@@ -204,7 +207,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 20,
     width: '90%',
@@ -218,7 +220,6 @@ const styles = StyleSheet.create({
   },
   featureBox: {
     marginBottom: 14,
-    backgroundColor: '#f3f3f3',
     borderRadius: 8,
     padding: 8,
   },
@@ -228,7 +229,6 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 13,
-    color: '#222',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   closeButton: {

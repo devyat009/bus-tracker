@@ -63,7 +63,7 @@ const initialState = {
     longitude: -47.882705972050054,
   },
   zoom: 15,
-  style: 'osm' as MapStyle,
+  style: 'light' as MapStyle,
   showBuses: true,
   showStops: true,
   showOnlyActiveBuses: false,
