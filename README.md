@@ -59,6 +59,10 @@ npx expo eject
 cd android
 ./gradlew assembleRelease
 ```
+
+altere o AndroidManifest em application:
+android:usesCleartextTraffic="true"
+
 apk location
 bus-tracker\android\app\build\outputs\apk\release
 
