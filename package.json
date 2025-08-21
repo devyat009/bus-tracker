@@ -25,7 +25,7 @@
     "build:android:http": "expo build:android",
     "build-and-install:android": "npm run build:android:local && npm run install:android",
     "install:android": "adb install -r android/app/build/outputs/apk/release/app-release.apk",
-    "build:android:local": "npm run prebuild && cd android && ./gradlew assembleRelease"
+    "build:android:local": "npm run prebuild && cd android && gradlew assembleRelease"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
