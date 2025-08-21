@@ -118,7 +118,7 @@ class ApiService {
 
     const [longitude, latitude] = geometry.coordinates as [number, number];
     
-    if (!properties.prefixo || (!properties.cd_linha && !properties.linha && !properties.servico)) {
+    if (!properties.prefixo) {
       return null;
     }
 
@@ -128,11 +128,11 @@ class ApiService {
       linha: properties.cd_linha || properties.linha || properties.servico || '',
       latitude,
       longitude,
-      velocidade: properties.velocidade || 0,
+      velocidade: properties.velocidade ? Number(String(properties.velocidade).replace(',', '.')) : 0,
       sentido: properties.sentido || '',
       datalocal: properties.datalocal || '',
       tarifa: properties.tarifa,
-      active: Boolean(properties.cd_linha || properties.linha || properties.servico),
+      active: Boolean(properties.cd_linha || properties.prefixo),
     };
   }
 
