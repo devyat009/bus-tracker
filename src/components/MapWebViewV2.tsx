@@ -32,15 +32,23 @@ const mapStyles = {
 };
 
 const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
-  latitude = -15.793889, // Brasília
-  longitude = -47.882778,
-  zoom = 12,
+  latitude,
+  longitude,
+  zoom,
   style = {},
   onRegionDidChange,
   busStopMarker = [],
   onBusMarkerPress,
 }) => {
   const theme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
+  const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
+
+  // Atualiza o zoom quando a prop muda (ao recentralizar)
+  React.useEffect(() => {
+    if (zoom !== undefined) {
+      setCurrentZoom(zoom);
+    }
+  }, [zoom]);
 
   const handleRegionDidChange = async (event: any) => {
     if (onRegionDidChange && event && event.properties && event.properties.visibleBounds) {
@@ -49,9 +57,10 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
       const center = event.geometry?.coordinates
         ? { longitude: event.geometry.coordinates[0], latitude: event.geometry.coordinates[1] }
         : undefined;
-      const zoom = event.properties.zoomLevel;
-      onRegionDidChange({ north, south, east, west }, center, zoom);
-      
+      const zoomLevel = event.properties.zoomLevel;
+      setCurrentZoom(zoomLevel); // Atualiza o zoom local
+      onRegionDidChange({ north, south, east, west }, center, zoomLevel);
+
     }
   };
   
@@ -62,15 +71,19 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
         mapStyle={mapStyles[theme] || mapStyles.light}
         onRegionDidChange={handleRegionDidChange}
       >
-        <Camera
-          centerCoordinate={[longitude, latitude]}
-          zoomLevel={zoom}
-        />
+        {latitude !== undefined && longitude !== undefined && zoom !== undefined ? (
+          <Camera
+              centerCoordinate={[longitude, latitude]}
+              zoomLevel={zoom}
+            />
+          ) : (
+          <Camera />
+        )}
         <UserLocation
           visible={true}
           showsUserHeadingIndicator={true}
         />
-        {zoom >= 12 && busStopMarker.map((busStop: BusStopMarker) => (
+        {currentZoom >= 14 && busStopMarker.map((busStop: BusStopMarker) => (
           <PointAnnotation
             key={busStop.id}
             id={busStop.id}

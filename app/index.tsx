@@ -36,7 +36,7 @@ export default function Index() {
 
   // Centralizar no usuário ao iniciar
   useEffect(() => {
-    if (userLocation) {
+    if (userLocation && !initialized) {
       setMapCenter({
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
@@ -45,7 +45,7 @@ export default function Index() {
       setCameraMode('auto');
       setInitialized(true);
     }
-  }, [userLocation, initialized]);
+  }, [userLocation]);
 
   // Centralizar no usuário
   const handleLocatePress = async () => {
@@ -107,9 +107,9 @@ export default function Index() {
       </View>
       <View style={styles.mapContainer}>
         <MapLibreBasic
-          latitude={mapCenter.latitude}
-          longitude={mapCenter.longitude}
-          zoom={mapCenter.zoom}
+          latitude={cameraMode === 'auto' ? mapCenter.latitude : undefined}
+          longitude={cameraMode === 'auto' ? mapCenter.longitude : undefined}
+          zoom={cameraMode === 'auto' ? mapCenter.zoom : undefined}
           style={{ flex: 1 }}
           theme='dark' // light,
           busStopMarker={stops.map(stop => ({
