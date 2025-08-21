@@ -125,18 +125,6 @@ export interface AppConfig {
       lines: string;
     };
   };
-  map: {
-    initialPosition: {
-      latitude: number;
-      longitude: number;
-      zoom: number;
-    };
-    styles: Record<MapStyle, {
-      url: string;
-      attribution: string;
-      maxZoom: number;
-    }>;
-  };
   cache: {
     ttl: number; // Time to live in milliseconds
     maxSize: number;

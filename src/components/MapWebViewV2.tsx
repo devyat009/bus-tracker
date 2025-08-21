@@ -5,7 +5,7 @@ import {
   UserLocation
 } from '@maplibre/maplibre-react-native';
 import React, { useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useAppStore } from '../store';
 
 interface BusStopMarker {
@@ -67,6 +67,8 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
   const [selectedBus, setSelectedBus] = useState<BusMarker | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const [isFetching, setIsFetching] = React.useState(false);
+  const progressAnim = React.useRef(new Animated.Value(0)).current;
 
   // Atualiza o zoom quando a prop muda (ao recentralizar)
   React.useEffect(() => {
@@ -117,9 +119,44 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
       }, 5000);
     }
   };
+
+  // Simula busca dos ônibus a cada 5 segundos
+  React.useEffect(() => {
+    const fetchBuses = () => {
+      setIsFetching(true);
+      progressAnim.setValue(0);
+      Animated.timing(progressAnim, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start(() => {
+        setIsFetching(false);
+        progressAnim.setValue(0);
+      });
+    };
+
+    fetchBuses(); // Busca inicial
+    const interval = setInterval(fetchBuses, 5000);
+    return () => clearInterval(interval);
+  }, []);
   
   return (
     <View style={[styles.container, style]}>
+      {/* Barrinha azul de busca */}
+      {isFetching && (
+        <Animated.View
+          style={[
+            styles.fetchBar,
+            {
+              width: progressAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0%', '100%'],
+              }),
+            },
+          ]}
+        />
+      )}
       <MapView
         style={{ flex: 1 }}
         mapStyle={mapStyles[mapTheme] || mapStyles.light}
@@ -262,6 +299,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  fetchBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: 4,
+    backgroundColor: '#2196F3',
+    zIndex: 10,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
   },
 });
 
