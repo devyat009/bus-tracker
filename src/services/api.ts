@@ -35,7 +35,12 @@ class ApiService {
       let url = `${this.baseUrl}?${endpoint}`;
       
       if (bounds) {
-        const bbox = `${bounds.west},${bounds.south},${bounds.east},${bounds.north},EPSG:4326`;
+        const minX = Math.min(bounds.west, bounds.east);
+        const maxX = Math.max(bounds.west, bounds.east);
+        const minY = Math.min(bounds.south, bounds.north);
+        const maxY = Math.max(bounds.south, bounds.north);
+
+        const bbox = `${minX},${minY},${maxX},${maxY},EPSG:4326`;
         url += `&bbox=${bbox}&srsName=EPSG:4326`;
       }
 

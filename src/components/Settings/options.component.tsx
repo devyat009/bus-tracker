@@ -20,7 +20,7 @@ const SettingsOptions = () => {
   return (
     <View>
       <TouchableOpacity onPress={toggleExpand} style={styles.option}>
-        <Text style={styles.optionText}>Tema</Text>
+        <Text style={styles.optionText}>Tema do Mapa</Text>
         <Ionicons
           name={expanded ? "chevron-up" : "chevron-down"}
           size={24}
