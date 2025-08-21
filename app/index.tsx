@@ -1,14 +1,11 @@
-import MapControls from '@/src/components/MapControlsModern';
-import MapWebView, { MapWebViewHandle } from '@/src/components/MapWebView';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import MapLibreBasic from '../src/components/MapWebViewV2';
 import { useLocation } from "../src/hooks/useLocation";
 import { useAppStore } from "../src/store";
 
 export default function Index() {
-  const mapRef = useRef<MapWebViewHandle>(null);
-
   // Location hook
   const { userLocation, getCurrentLocation, requestPermission } = useLocation();
 
@@ -18,13 +15,16 @@ export default function Index() {
   // Centralizar no usuário
   const handleLocatePress = async () => {
     try {
+      const permission = await requestPermission();
+      if (!permission) {
+        console.warn('Permissão de localização negada');
+        return;
+      }
       const location = await getCurrentLocation();
-      if (location && mapRef.current) {
+      if (location) {
         setMapCenter(location.latitude, location.longitude);
         setMapZoom(16);
-        mapRef.current.recenter?.(location.latitude, location.longitude, 16);
-        mapRef.current.setUserMarkerVisible(true);
-        mapRef.current.showToast('Localização atualizada', 2000);
+        // O MapLibreBasic vai receber novas props e centralizar via props
       }
     } catch (error) {
       console.error('Failed to get location:', error);
@@ -36,31 +36,19 @@ export default function Index() {
     requestPermission();
   }, [requestPermission]);
 
-  // Map pronto
-  const handleMapReady = () => {
-    if (userLocation && mapRef.current) {
-      mapRef.current.recenter?.(userLocation.latitude, userLocation.longitude, 16);
-    }
-  };
-
-  // Erro no mapa
-  const handleMapError = (error: string) => {
-    console.error('Map error:', error);
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>ÔnibusDF</Text>
       </View>
       <View style={styles.mapContainer}>
-        <MapWebView
-          ref={mapRef}
-          onMapReady={handleMapReady}
-          onMapError={handleMapError}
+        <MapLibreBasic
+          latitude={userLocation?.latitude ?? -15.793889}
+          longitude={userLocation?.longitude ?? -47.882778}
+          zoom={12}
+          style={{ flex: 1 }}
+          theme='dark' // light
         />
-        {/* Pass mapRef as MapWebViewHandle, not MapHandle */}
-        <MapControls mapRef={mapRef as any} />
         <TouchableOpacity
           style={styles.locateButton}
           onPress={handleLocatePress}
@@ -97,7 +85,7 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     flex: 1,
-    padding: 10,
+    padding: 8,
   },
   locateButton: {
     position: 'absolute',
