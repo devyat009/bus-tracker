@@ -106,7 +106,12 @@ export default function Index() {
           id: bus.id,
           latitude: bus.latitude,
           longitude: bus.longitude,
-          title: bus.linha,
+          title: `Linha ${bus.linha} - ${bus.prefixo}`,
+          prefixo: bus.prefixo,
+          linha: bus.linha,
+          velocidade: bus.velocidade,
+          sentido: bus.sentido,
+          datalocal: bus.datalocal,
         })));
       } catch (error) {
         console.error('Erro ao buscar ônibus', error);

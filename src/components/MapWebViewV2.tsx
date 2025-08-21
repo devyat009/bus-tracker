@@ -1,5 +1,4 @@
 import {
-  Callout,
   Camera,
   MapView,
   PointAnnotation,
@@ -21,6 +20,11 @@ interface BusMarker {
   latitude: number;
   longitude: number;
   title?: string;
+  prefixo?: string;
+  linha?: string;
+  velocidade?: number;
+  sentido?: string;
+  datalocal?: string;
 }
 
 interface MapLibreBasicProps {
@@ -60,8 +64,8 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
 }) => {
   const theme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
   const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
-  const [selectedBusId, setSelectedBusId] = useState<string | null>(null);
-  const fadeAnim = React.useRef(new Animated.Value(1)).current;
+  const [selectedBus, setSelectedBus] = useState<BusMarker | null>(null);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   // Atualiza o zoom quando a prop muda (ao recentralizar)
   React.useEffect(() => {
@@ -86,18 +90,22 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   };
 
   // Manipulao ao selecionar um onibus
-  const handleBusSelect = (busId: string) => {
-    console.log('Bus select:', busId);
-    if (selectedBusId === busId) {
+  const handleBusSelect = (bus: BusMarker) => {
+    console.log('Bus select:', bus.id);
+    if (selectedBus?.id === bus.id) {
       // Fade out
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
-      }).start(() => setSelectedBusId(null));
+      }).start(() => setSelectedBus(null));
     } else {
-      fadeAnim.setValue(1); // Reset opacity imediatamente
-      setSelectedBusId(busId);
+      setSelectedBus(bus);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     }
   };
   
@@ -142,12 +150,12 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
         ))}
 
         {/* Ônibus */}
-        {currentZoom >= 11 && buses && buses.map((bus: BusMarker) => (
+        {currentZoom >= 13 && buses && buses.map((bus: BusMarker) => (
           <PointAnnotation
             key={bus.id}
             id={bus.id}
             coordinate={[bus.longitude, bus.latitude]}
-            onSelected={() => handleBusSelect(bus.id)}
+            onSelected={() => handleBusSelect(bus)}
           >
             <View style={{
               width: 40,
@@ -167,20 +175,38 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
                 alignItems: 'center',
               }} />
             </View>
-            <>
-              {selectedBusId === bus.id && (
-                <Callout>
-                  <Animated.View style={{ opacity: fadeAnim }}>
-                    <View style={{ padding: 8 }}>
-                      <Text style={{ fontWeight: 'bold' }}>{bus.title || bus.id}</Text>
-                    </View>
-                  </Animated.View>
-                </Callout>
-              )}
-            </>
           </PointAnnotation>
         ))}
       </MapView>
+      
+      {/* Popup customizado fora do mapa */}
+      {selectedBus && (
+        <Animated.View style={[styles.customPopup, { opacity: fadeAnim }]}>
+          <View style={styles.popupContent}>
+            <Text style={styles.popupTitle}>
+              Linha {selectedBus.linha}
+            </Text>
+            <Text style={styles.popupSubtitle}>
+              Prefixo: {selectedBus.prefixo}
+            </Text>
+            {selectedBus.velocidade && (
+              <Text style={styles.popupInfo}>
+                Velocidade: {selectedBus.velocidade.toFixed(1)} km/h
+              </Text>
+            )}
+            {selectedBus.sentido && (
+              <Text style={styles.popupInfo}>
+                Sentido: {selectedBus.sentido === '1' ? 'Ida' : selectedBus.sentido === '2' ? 'Volta' : selectedBus.sentido}
+              </Text>
+            )}
+            {selectedBus.datalocal && (
+              <Text style={styles.popupTimestamp}>
+                Atualizado: {new Date(selectedBus.datalocal).toLocaleTimeString('pt-BR')}
+              </Text>
+            )}
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 };
@@ -191,6 +217,43 @@ const styles = StyleSheet.create({
     minHeight: 300,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+  customPopup: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  popupContent: {
+    padding: 12,
+  },
+  popupTitle: {
+    fontWeight: 'bold',
+    fontSize: 16,
+    color: '#333',
+  },
+  popupSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  popupInfo: {
+    fontSize: 12,
+    color: '#444',
+    marginTop: 2,
+  },
+  popupTimestamp: {
+    fontSize: 10,
+    color: '#888',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });
 
