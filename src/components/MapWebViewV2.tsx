@@ -1,4 +1,8 @@
-import MapLibreGL from '@maplibre/maplibre-react-native';
+import {
+  Camera,
+  MapView,
+  UserLocation
+} from '@maplibre/maplibre-react-native';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useAppStore } from '../store';
@@ -27,15 +31,19 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      <MapLibreGL.MapView
+      <MapView
         style={{ flex: 1 }}
         mapStyle={mapStyles[theme] || mapStyles.light}
       >
-        <MapLibreGL.Camera
+        <Camera
           centerCoordinate={[longitude, latitude]}
           zoomLevel={zoom}
         />
-      </MapLibreGL.MapView>
+        <UserLocation
+          visible={true}
+          showsUserHeadingIndicator={true}
+        />
+      </MapView>
     </View>
   );
 };
