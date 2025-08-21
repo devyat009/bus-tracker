@@ -21,7 +21,11 @@
     "build:android:dev": "cross-env NODE_ENV=development npm run prebuild && cd android && ./gradlew assembleDebug",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "build:android:http": "expo build:android",
+    "build-and-install:android": "npm run build:android:local && npm run install:android",
+    "install:android": "adb install -r android/app/build/outputs/apk/release/app-release.apk",
+    "build:android:local": "npm run prebuild && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",

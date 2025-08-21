@@ -23,6 +23,7 @@ export default ({ config }) => {
         backgroundColor: "#ffffff"
       },
       edgeToEdgeEnabled: true,
+      usesCleartextTraffic: true,
       package: isDevelopment 
         ? "com.devyat.bustracker.dev" 
         : "com.devyat.bustracker"
