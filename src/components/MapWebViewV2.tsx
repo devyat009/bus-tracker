@@ -1,11 +1,12 @@
 import {
+  Callout,
   Camera,
   MapView,
   PointAnnotation,
   UserLocation
 } from '@maplibre/maplibre-react-native';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useAppStore } from '../store';
 
 interface BusStopMarker {
@@ -59,6 +60,8 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
 }) => {
   const theme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
   const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
+  const [selectedBusId, setSelectedBusId] = useState<string | null>(null);
+  const fadeAnim = React.useRef(new Animated.Value(1)).current;
 
   // Atualiza o zoom quando a prop muda (ao recentralizar)
   React.useEffect(() => {
@@ -67,6 +70,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
     }
   }, [zoom]);
 
+  // Manipula a mudança de região
   const handleRegionDidChange = async (event: any) => {
     if (onRegionDidChange && event && event.properties && event.properties.visibleBounds) {
       const [[west, south], [east, north]] = event.properties.visibleBounds;
@@ -78,6 +82,22 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
       setCurrentZoom(zoomLevel); // Atualiza o zoom local
       onRegionDidChange({ north, south, east, west }, center, zoomLevel);
 
+    }
+  };
+
+  // Manipulao ao selecionar um onibus
+  const handleBusSelect = (busId: string) => {
+    console.log('Bus select:', busId);
+    if (selectedBusId === busId) {
+      // Fade out
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setSelectedBusId(null));
+    } else {
+      fadeAnim.setValue(1); // Reset opacity imediatamente
+      setSelectedBusId(busId);
     }
   };
   
@@ -100,6 +120,8 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
           visible={true}
           showsUserHeadingIndicator={true}
         />
+
+        {/* Paradas de ônibus */}
         {currentZoom >= 14 && busStopMarker.map((busStop: BusStopMarker) => (
           <PointAnnotation
             key={busStop.id}
@@ -108,8 +130,8 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
             onSelected={() => onBusStopMarkerPress?.(busStop)}
           >
           <View style={{
-              width: 18,
-              height: 18,
+              width: 35,
+              height: 35,
               backgroundColor: '#007AFF',
               borderRadius: 9,
               borderWidth: 2,
@@ -118,25 +140,44 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
           />
           </PointAnnotation>
         ))}
+
+        {/* Ônibus */}
         {currentZoom >= 11 && buses && buses.map((bus: BusMarker) => (
           <PointAnnotation
             key={bus.id}
             id={bus.id}
             coordinate={[bus.longitude, bus.latitude]}
-            onSelected={() => onBusMarkerPress?.(bus)}
+            onSelected={() => handleBusSelect(bus.id)}
           >
             <View style={{
-              width: 16,
-              height: 16,
-              backgroundColor: '#FFD600',
-              borderRadius: 8,
-              borderWidth: 2,
-              borderColor: '#333',
-              justifyContent: 'center',
+              width: 40,
+              height: 40,
               alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'transparent',
             }}>
-              {/* Você pode customizar o ícone do ônibus aqui */}
+              <View style={{
+                width: 27,
+                height: 27,
+                backgroundColor: '#FFD600',
+                borderRadius: 13.5,
+                borderWidth: 2,
+                borderColor: '#a91a1aff',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }} />
             </View>
+            <>
+              {selectedBusId === bus.id && (
+                <Callout>
+                  <Animated.View style={{ opacity: fadeAnim }}>
+                    <View style={{ padding: 8 }}>
+                      <Text style={{ fontWeight: 'bold' }}>{bus.title || bus.id}</Text>
+                    </View>
+                  </Animated.View>
+                </Callout>
+              )}
+            </>
           </PointAnnotation>
         ))}
       </MapView>
