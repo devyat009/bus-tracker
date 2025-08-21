@@ -1,6 +1,7 @@
 import MapLibreGL from '@maplibre/maplibre-react-native';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useAppStore } from '../store';
 
 interface MapLibreBasicProps {
   latitude?: number;
@@ -13,6 +14,7 @@ interface MapLibreBasicProps {
 const mapStyles = {
   light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
   dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+  osm: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', // fallback
 };
 
 const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
@@ -20,13 +22,14 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   longitude = -47.882778,
   zoom = 12,
   style = {},
-  theme = 'light',
 }) => {
+  const theme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
+
   return (
     <View style={[styles.container, style]}>
       <MapLibreGL.MapView
         style={{ flex: 1 }}
-        mapStyle={mapStyles[theme]}
+        mapStyle={mapStyles[theme] || mapStyles.light}
       >
         <MapLibreGL.Camera
           centerCoordinate={[longitude, latitude]}

@@ -1,3 +1,4 @@
+import SettingsOptions from '@/src/components/Settings/options.component';
 import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import DeveloperOptions from '../components/SettingsComponent/DeveloperOptions';
@@ -10,6 +11,7 @@ const Settings = () => {
           <Text style={styles.title}>Settings</Text>
           <Text style={styles.subtitle}>Configurações do aplicativo</Text>
           <DeveloperOptions />
+          <SettingsOptions />
         </View>
       </ScrollView>
     </SafeAreaView>
