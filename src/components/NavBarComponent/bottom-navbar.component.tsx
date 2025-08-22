@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -13,12 +13,21 @@ const BottomNavbar: React.FC<BottomNavbarProps> = ({ onTabChange }) => {
     {
       name: 'map',
       label: 'Mapa',
+      iconSet: 'ion',
       icon: 'map-outline' as const,
       activeIcon: 'map' as const,
     },
     {
+      name: 'stops',
+      label: 'Paradas',
+      iconSet: 'mci',
+      icon: 'bus-stop' as const,
+      activeIcon: 'bus-stop' as const,
+    },
+    {
       name: 'settings',
       label: 'Configurações',
+      iconSet: 'ion',
       icon: 'settings-outline' as const,
       activeIcon: 'settings' as const,
     }
@@ -39,11 +48,19 @@ const BottomNavbar: React.FC<BottomNavbarProps> = ({ onTabChange }) => {
             style={styles.tab}
             onPress={() => handleTabPress(tab.name)}
           >
-            <Ionicons
-              name={isActive ? tab.activeIcon : tab.icon}
-              size={24}
-              color={isActive ? '#007AFF' : '#8E8E93'}
-            />
+            {tab.iconSet === 'mci' ? (
+              <MaterialCommunityIcons
+                name={isActive ? (tab.activeIcon as any) : (tab.icon as any)}
+                size={24}
+                color={isActive ? '#007AFF' : '#8E8E93'}
+              />
+            ) : (
+              <Ionicons
+                name={isActive ? (tab.activeIcon as any) : (tab.icon as any)}
+                size={24}
+                color={isActive ? '#007AFF' : '#8E8E93'}
+              />
+            )}
             <Text style={[
               styles.label,
               { color: isActive ? '#007AFF' : '#8E8E93' }
