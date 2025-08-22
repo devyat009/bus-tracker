@@ -26,6 +26,11 @@ npm install
 
 2) Iniciar em modo desenvolvimento
 
+Inicialize o expo para gerar seus arquivos:
+```
+npx expo start
+```
+depois:
 ```bash
 npm run android:dev
 ```
