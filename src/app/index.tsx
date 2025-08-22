@@ -3,7 +3,7 @@ import { useAppStore } from '@/src/store';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from "react";
 import { Alert, Modal, SafeAreaView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
-import MapLibreBasic from '../components/MapWebViewV2';
+import MapLibreBasic from '../components/MapLibre';
 import { useLocation } from "../hooks/useLocation";
 
 export default function Index() {
