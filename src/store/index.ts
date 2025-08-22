@@ -212,6 +212,7 @@ export const useAppStore = create<AppState>()(
       storage: createJSONStorage(() => AsyncStorage),
       // Only persist user preferences, not data
       partialize: (state) => ({
+        appTheme: state.appTheme,
         style: state.style,
         showBuses: state.showBuses,
         showStops: state.showStops,

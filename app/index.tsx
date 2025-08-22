@@ -14,8 +14,15 @@ export default function Index() {
   const [stops, setStops] = useState<any[]>([]);
   const [buses, setBuses] = useState<any[]>([]);
   // Store
-  //const { setMapCenter, setMapZoom, loading } = useAppStore();
-  const { loading, style: mapTheme, appTheme } = useAppStore();
+  const { 
+    loading, 
+    style: mapTheme, 
+    appTheme,
+    showOnlyActiveBuses,
+    showStops: showStopsStore,
+    setShowOnlyActiveBuses,
+    setShowStops: setShowStopsStore
+  } = useAppStore();
 
   // Map center state
   const [mapCenter, setMapCenter] = useState({
@@ -32,8 +39,6 @@ export default function Index() {
 
   // Settings modal
   const [showSettings, setShowSettings] = useState(false);
-  const [showActiveOnly, setShowActiveOnly] = useState(false);
-  const [showStops, setShowStops] = useState(true);
 
   // Solicitar permissão ao montar
   useEffect(() => {
@@ -112,7 +117,7 @@ export default function Index() {
       if (!bounds) return;
       try {
         const result = await apiService.getEnhancedBuses(bounds);
-        const filteredBuses = showActiveOnly 
+        const filteredBuses = showOnlyActiveBuses 
           ? result.filter(bus => bus.linha && bus.linha.trim())
           : result;
         setBuses(filteredBuses.map(bus => ({
@@ -137,7 +142,7 @@ export default function Index() {
     interval = setInterval(fetchBuses, 8000); // Atualiza a cada 8 segundos
 
     return () => clearInterval(interval);
-  }, [bounds, showActiveOnly]);
+  }, [bounds, showOnlyActiveBuses]);
   
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: appTheme === 'dark' ? '#000' : '#fff' }]}>
@@ -152,7 +157,7 @@ export default function Index() {
           style={{ flex: 1 }}
           theme={mapTheme as 'light' | 'dark'} // Usar tema do mapa do store
           // Paradas de onibus
-          busStopMarker={showStops ? stops.map(stop => ({
+          busStopMarker={showStopsStore ? stops.map(stop => ({
             id: stop.id,
             latitude: stop.latitude,
             longitude: stop.longitude,
@@ -205,10 +210,13 @@ export default function Index() {
                 Apenas ônibus ativos
               </Text>
               <Switch
-                value={showActiveOnly}
-                onValueChange={setShowActiveOnly}
-                trackColor={{ false: '#767577', true: '#81b0ff' }}
-                thumbColor={showActiveOnly ? '#007AFF' : '#f4f3f4'}
+                value={showOnlyActiveBuses}
+                onValueChange={setShowOnlyActiveBuses}
+                trackColor={{ 
+                  false: '#767577', 
+                  true: appTheme === 'dark' ? '#81b0ff' : '#81b0ff' 
+                }}
+                thumbColor={showOnlyActiveBuses ? (appTheme === 'dark' ? '#007AFF' : '#007AFF') : '#f4f3f4'}
               />
             </View>
 
@@ -217,10 +225,13 @@ export default function Index() {
                 Mostrar paradas
               </Text>
               <Switch
-                value={showStops}
-                onValueChange={setShowStops}
-                trackColor={{ false: '#767577', true: '#81b0ff' }}
-                thumbColor={showStops ? '#007AFF' : '#f4f3f4'}
+                value={showStopsStore}
+                onValueChange={setShowStopsStore}
+                trackColor={{ 
+                  false: '#767577', 
+                  true: appTheme === 'dark' ? '#81b0ff' : '#81b0ff' 
+                }}
+                thumbColor={showStopsStore ? (appTheme === 'dark' ? '#007AFF' : '#007AFF') : '#f4f3f4'}
               />
             </View>
 

@@ -47,7 +47,13 @@ const SettingsOptions = () => {
       {appExpanded && (
         <View style={[styles.expandedContent, { backgroundColor: appTheme === 'dark' ? '#111' : '#f9f9f9' }]}>
           <TouchableOpacity
-            style={[styles.themeToggle, appTheme === 'light' && styles.themeActive]}
+            style={[
+              styles.themeToggle, 
+              appTheme === 'light' && {
+                backgroundColor: '#e3f2fd',
+                borderRadius: 8
+              }
+            ]}
             onPress={() => handleAppThemeChange('light')}
           >
             <Ionicons
@@ -58,7 +64,13 @@ const SettingsOptions = () => {
             <Text style={[styles.themeText, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>Claro</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.themeToggle, appTheme === 'dark' && styles.themeActive]}
+            style={[
+              styles.themeToggle, 
+              appTheme === 'dark' && {
+                backgroundColor: '#555',
+                borderRadius: 8
+              }
+            ]}
             onPress={() => handleAppThemeChange('dark')}
           >
             <Ionicons
@@ -86,7 +98,13 @@ const SettingsOptions = () => {
       {mapExpanded && (
         <View style={[styles.expandedContent, { backgroundColor: appTheme === 'dark' ? '#111' : '#f9f9f9' }]}>
           <TouchableOpacity
-            style={[styles.themeToggle, mapTheme === 'light' && styles.themeActive]}
+            style={[
+              styles.themeToggle, 
+              mapTheme === 'light' && {
+                backgroundColor: appTheme === 'dark' ? '#555' : '#e3f2fd',
+                borderRadius: 8
+              }
+            ]}
             onPress={() => handleMapThemeChange('light')}
           >
             <Ionicons
@@ -97,7 +115,13 @@ const SettingsOptions = () => {
             <Text style={[styles.themeText, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>Claro</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.themeToggle, mapTheme === 'dark' && styles.themeActive]}
+            style={[
+              styles.themeToggle, 
+              mapTheme === 'dark' && {
+                backgroundColor: appTheme === 'dark' ? '#555' : '#e3f2fd',
+                borderRadius: 8
+              }
+            ]}
             onPress={() => handleMapThemeChange('dark')}
           >
             <Ionicons
@@ -131,10 +155,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 8,
-  },
-  themeActive: {
-    backgroundColor: "#e6f0ff",
-    borderRadius: 8,
   },
   themeText: {
     marginLeft: 10,
