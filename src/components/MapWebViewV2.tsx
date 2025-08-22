@@ -31,6 +31,7 @@ interface BusMarker {
     tipoOnibus: string;
     dataReferencia: string;
   };
+  corOperadora?: string;
 }
 
 interface MapLibreBasicProps {
@@ -219,7 +220,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
               <View style={{
                 width: 30,
                 height: 30,
-                backgroundColor: '#FFD600',
+                backgroundColor: bus.corOperadora,
                 borderRadius: 13.5,
                 borderWidth: 2,
                 borderColor: '#a91a1aff',

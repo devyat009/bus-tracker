@@ -114,18 +114,55 @@ class ApiService {
   private enhanceBusWithOperator(bus: Bus, frotaMap: Map<string, FrotaOperadora>): EnhancedBus {
     const frotaInfo = frotaMap.get(bus.prefixo);
     
-    const enhancedBus: EnhancedBus = {
-      ...bus,
+    // Mapeamento das operadoras principais e suas cores
+    const operadorasPrincipais: { [key: string]: { nome: string; cor: string } } = {
+      'URBI': { nome: 'URBI', cor: '#2b97bbff' }, // Azul claro
+      'PIONEIRA': { nome: 'PIONEIRA', cor: '#ffff00' }, // Amarelo
+      'PIRACICABANA': { nome: 'PIRACICABANA', cor: '#006400' }, // Verde escuro
+      'MARECHAL': { nome: 'MARECHAL', cor: '#fb6900f0' }, // Laranja
+      'SÃO JOSÉ': { nome: 'SÃO JOSÉ', cor: '#938326' }, // #938326
+      'UNIÃO TRANSPORTE BRASÍLIA': { nome: 'UNIÃO TRANSPORTE BRASÍLIA', cor: 'cyan' }, // Azul cyano
     };
 
-    if (frotaInfo) {
-      enhancedBus.operadora = {
-        nome: frotaInfo.operadora,
-        servico: frotaInfo.servico,
-        tipoOnibus: frotaInfo.tipoOnibus,
-        dataReferencia: frotaInfo.dataReferencia,
-      };
+    let nomeOperadora = frotaInfo?.operadora || '';
+    let corOperadora = undefined;
+
+    // Detecta e reduz o nome se for uma das principais
+    let found = false;
+    for (const key in operadorasPrincipais) {
+      if (nomeOperadora.toUpperCase().includes(key)) {
+        nomeOperadora = operadorasPrincipais[key].nome;
+        corOperadora = operadorasPrincipais[key].cor;
+        found = true;
+        break;
+      }
     }
+    // Se não encontrou, mantém nome completo e cor indefinida
+    if (!found && nomeOperadora) {
+      corOperadora = undefined;
+    }
+
+    const enhancedBus: EnhancedBus = {
+      ...bus,
+      operadora: frotaInfo
+        ? {
+            nome: nomeOperadora,
+            servico: frotaInfo.servico,
+            tipoOnibus: frotaInfo.tipoOnibus,
+            dataReferencia: frotaInfo.dataReferencia,
+          }
+        : undefined,
+      corOperadora,
+    };
+
+    // if (frotaInfo) {
+    //   enhancedBus.operadora = {
+    //     nome: frotaInfo.operadora,
+    //     servico: frotaInfo.servico,
+    //     tipoOnibus: frotaInfo.tipoOnibus,
+    //     dataReferencia: frotaInfo.dataReferencia,
+    //   };
+    // }
 
     return enhancedBus;
   }
