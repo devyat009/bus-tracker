@@ -1,8 +1,8 @@
 ## Ônibus DF (Brasília) — App Mobile
 
-App em React Native (Expo) para visualizar ônibus e paradas do Distrito Federal (Brasília, Brasil), com mapa OpenStreetMap e localização do usuário.
+App em React Native (Expo) para visualizar ônibus e paradas do Distrito Federal (Brasília, Brasil).
 
-- Mapa: OpenStreetMap via WebView + Leaflet
+- Mapa: Maplibre
 - UI base: Expo + TypeScript
 
 
@@ -34,9 +34,9 @@ Abra no:
 - Emulador Android (Android Studio)
 - Dispositivo físico com Expo Go (escaneando o QR code)
 
-Observação: conceda permissão de localização quando solicitado para que o botão “me encontrar” funcione e o mapa recentre na sua posição.
+Observação: conceda permissão de localização quando solicitado para que o botão “me encontrar” funcione e o mapa recentrali-ze na sua posição.
 
-## Compilação (Build — padrão Expo)
+## Compilação (Build)
 
 Build local para Android com Expo:
 
@@ -53,18 +53,42 @@ Observação (iOS): `npx expo run:ios` requer macOS com Xcode.
 
 ou
 ```bash
-npx expo eject
+npx expo prebuild
 ```
+
+### Altere o AndroidManifest para poder habilitar requisições do tipo HTTP
+
+Abra o arquivo `/android/app/src/main/AndroidManifest.xml`
+
+Em `<Application>` adicione a seguinte linha: `android:usesCleartextTraffic="true"`
+
+### Para instalar utilize o comando:
+
 ```bash
-cd android
-./gradlew assembleRelease
+cd android && ./gradlew assembleRelease && adb install -r android/app/build/outputs/apk/release/app-release.apk
 ```
 
-altere o AndroidManifest em application:
-android:usesCleartextTraffic="true"
+## Erros:
 
-apk location
-bus-tracker\android\app\build\outputs\apk\release
+### Android SDK:
+Caso não compile por conta do ANDROID_HOME não ser encontrado:
+
+Adicione ao path do sistema o ANDROID_HOME
+```
+set ANDROID_HOME=C:\Users\YOUR_USER\AppData\Local\Android\Sdk
+
+set PATH=%PATH%;%ANDROID_HOME%\tools %ANDROID_HOME%\platform-tools
+```
+
+#### Crie o arquivo em `/android` com o nome `local.properties`
+```
+nano android/local.properties
+```
+#### Adicione a seguinte linha:
+```
+sdk.dir=C:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+```
+`ctrl+O` para salvar, `Enter` e depois `ctrl-X` para sair.
 
 
 ## Licença
