@@ -31,6 +31,7 @@ export interface BusStop {
   descricao: string;
   latitude: number;
   longitude: number;
+  situacao?: string;
 }
 
 export interface BusLine {
