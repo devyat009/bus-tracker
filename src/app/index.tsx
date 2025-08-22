@@ -3,8 +3,8 @@ import { useAppStore } from '@/src/store';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from "react";
 import { Alert, Modal, SafeAreaView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
-import MapLibreBasic from '../src/components/MapWebViewV2';
-import { useLocation } from "../src/hooks/useLocation";
+import MapLibreBasic from '../components/MapWebViewV2';
+import { useLocation } from "../hooks/useLocation";
 
 export default function Index() {
   // Location hook
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   header: {
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#333',
   },
   title: {
     marginTop: 25,

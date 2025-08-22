@@ -1,8 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import BottomNavbar from "../components/BottomNavbar";
-import { useAppStore } from "../src/store";
+import BottomNavbar from "../components/NavBarComponent/bottom-navbar.component";
+import { useAppStore } from "../store";
 import Index from "./index";
 import Settings from "./settings";
 

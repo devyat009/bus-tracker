@@ -12,13 +12,13 @@ const BottomNavbar: React.FC<BottomNavbarProps> = ({ onTabChange }) => {
   const tabs = [
     {
       name: 'map',
-      label: 'Map',
+      label: 'Mapa',
       icon: 'map-outline' as const,
       activeIcon: 'map' as const,
     },
     {
       name: 'settings',
-      label: 'Settings',
+      label: 'Configurações',
       icon: 'settings-outline' as const,
       activeIcon: 'settings' as const,
     }

@@ -10,7 +10,7 @@ config.resolver.alias = {
   '@services': './src/services',
   '@utils': './src/utils',
   '@types': './src/types',
-  '@assets': './assets'
+  '@assets': './src/assets'
 };
 
 // Add HTML to asset extensions

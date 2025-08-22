@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { LayoutAnimation, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
-import { useAppStore } from '../../src/store';
+import { useAppStore } from '../../store';
 
 type UrlKey = 'buses' | 'stops' | 'lines';
 interface UrlItem {

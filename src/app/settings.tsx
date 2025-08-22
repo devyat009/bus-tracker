@@ -1,8 +1,8 @@
-import SettingsOptions from '@/src/components/Settings/options.component';
+import SettingsOptions from '@/src/components/SettingsComponent/settings.component';
 import { useAppStore } from '@/src/store';
 import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import DeveloperOptions from '../components/SettingsComponent/DeveloperOptions';
+import DeveloperOptions from '../components/SettingsComponent/developer-settings.component';
 
 const Settings = () => {
   const appTheme = useAppStore(state => state.appTheme);
@@ -11,10 +11,11 @@ const Settings = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: appTheme === 'dark' ? '#000' : '#fff' }]}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          <Text style={[styles.title, { color: appTheme === 'dark' ? '#fff' : '#000' }]}>Settings</Text>
+          <Text style={[styles.title, { color: appTheme === 'dark' ? '#fff' : '#000' }]}>Configurações</Text>
           <Text style={[styles.subtitle, { color: appTheme === 'dark' ? '#ccc' : '#666' }]}>Configurações do aplicativo</Text>
-          <DeveloperOptions />
+          <Text style={{marginTop: 10}}></Text>
           <SettingsOptions />
+          <DeveloperOptions />
         </View>
       </ScrollView>
     </SafeAreaView>
