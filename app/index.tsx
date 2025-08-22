@@ -2,7 +2,7 @@ import apiService from '@/src/services/api';
 import { useAppStore } from '@/src/store';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from "react";
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, SafeAreaView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import MapLibreBasic from '../src/components/MapWebViewV2';
 import { useLocation } from "../src/hooks/useLocation";
 
@@ -29,6 +29,11 @@ export default function Index() {
 
   // Map Camera
   const [cameraMode, setCameraMode] = useState<'auto' | 'free'>('auto');
+
+  // Settings modal
+  const [showSettings, setShowSettings] = useState(false);
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
+  const [showStops, setShowStops] = useState(true);
 
   // Solicitar permissão ao montar
   useEffect(() => {
@@ -70,6 +75,11 @@ export default function Index() {
       console.error('Failed to get location:', error);
     }
   };
+
+  // Configuracoes
+  const handleConfigPress = async () => {
+    setShowSettings(true);
+  }
   
   // Atualiza os bounds quando move o mapa
   const handleRegionDidChange = (
@@ -102,7 +112,10 @@ export default function Index() {
       if (!bounds) return;
       try {
         const result = await apiService.getEnhancedBuses(bounds);
-        setBuses(result.map(bus => ({
+        const filteredBuses = showActiveOnly 
+          ? result.filter(bus => bus.linha && bus.linha.trim())
+          : result;
+        setBuses(filteredBuses.map(bus => ({
           id: bus.id,
           latitude: bus.latitude,
           longitude: bus.longitude,
@@ -124,7 +137,7 @@ export default function Index() {
     interval = setInterval(fetchBuses, 8000); // Atualiza a cada 8 segundos
 
     return () => clearInterval(interval);
-  }, [bounds]);
+  }, [bounds, showActiveOnly]);
   
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: appTheme === 'dark' ? '#000' : '#fff' }]}>
@@ -139,12 +152,12 @@ export default function Index() {
           style={{ flex: 1 }}
           theme={mapTheme as 'light' | 'dark'} // Usar tema do mapa do store
           // Paradas de onibus
-          busStopMarker={stops.map(stop => ({
+          busStopMarker={showStops ? stops.map(stop => ({
             id: stop.id,
             latitude: stop.latitude,
             longitude: stop.longitude,
             title: stop.nome,
-          }))}
+          })) : []}
           onBusStopMarkerPress={marker => Alert.alert('Parada', marker.title || marker.id)}
           // Map change
           onRegionDidChange={handleRegionDidChange}
@@ -163,7 +176,63 @@ export default function Index() {
             color={loading.location ? "#999" : "#007AFF"}
           />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.configButton, { backgroundColor: appTheme === 'dark' ? '#333' : '#fff' }]}
+          onPress={handleConfigPress}
+        >
+          <Ionicons
+            name="settings"
+            size={28}
+            color={appTheme === 'dark' ? '#999' : '#007AFF'}
+          />
+        </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showSettings}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowSettings(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: appTheme === 'dark' ? '#333' : '#fff' }]}>
+            <Text style={[styles.modalTitle, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>
+              Configurações
+            </Text>
+            
+            <View style={styles.settingRow}>
+              <Text style={[styles.settingLabel, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>
+                Apenas ônibus ativos
+              </Text>
+              <Switch
+                value={showActiveOnly}
+                onValueChange={setShowActiveOnly}
+                trackColor={{ false: '#767577', true: '#81b0ff' }}
+                thumbColor={showActiveOnly ? '#007AFF' : '#f4f3f4'}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <Text style={[styles.settingLabel, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>
+                Mostrar paradas
+              </Text>
+              <Switch
+                value={showStops}
+                onValueChange={setShowStops}
+                trackColor={{ false: '#767577', true: '#81b0ff' }}
+                thumbColor={showStops ? '#007AFF' : '#f4f3f4'}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowSettings(false)}
+            >
+              <Text style={styles.closeButtonText}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -201,5 +270,59 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
+  },
+  configButton: {
+    position: 'absolute',
+    bottom: 84,
+    right: 24,
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    margin: 20,
+    borderRadius: 10,
+    padding: 20,
+    width: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  settingLabel: {
+    fontSize: 16,
+  },
+  closeButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
