@@ -1,8 +1,7 @@
 import {
   Camera,
   MapView,
-  PointAnnotation,
-  UserLocation
+  PointAnnotation
 } from '@maplibre/maplibre-react-native';
 import React, { useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
@@ -71,6 +70,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
 }) => {
   const mapTheme = useAppStore(state => state.style) as 'light' | 'dark' | 'osm';
   const appTheme = useAppStore(state => state.appTheme);
+  const userLocation = useAppStore(state => state.userLocation);
   const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
   const [selectedBus, setSelectedBus] = useState<BusMarker | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -177,10 +177,33 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
           ) : (
           <Camera />
         )}
-        <UserLocation
+        {/* <UserLocation
           visible={true}
           showsUserHeadingIndicator={true}
-        />
+        /> */}
+
+        
+        {/* User location marker */}
+        {userLocation && (
+          <PointAnnotation
+            key="user-location"
+            id="user-location"
+            coordinate={[userLocation.longitude, userLocation.latitude]}
+          >
+            <View style={{
+              width: 20,
+              height: 20,
+              backgroundColor: '#007AFF',
+              borderRadius: 10,
+              borderWidth: 3,
+              borderColor: '#fff',
+              shadowColor: '#000',
+              shadowOpacity: 0.3,
+              shadowRadius: 3,
+              shadowOffset: { width: 0, height: 1 },
+            }} />
+          </PointAnnotation>
+        )}
 
         {/* Paradas de ônibus */}
         {currentZoom >= 14 && busStopMarker.map((busStop: BusStopMarker) => (

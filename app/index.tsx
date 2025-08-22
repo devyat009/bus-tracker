@@ -8,7 +8,7 @@ import { useLocation } from "../src/hooks/useLocation";
 
 export default function Index() {
   // Location hook
-  const { userLocation, getCurrentLocation, requestPermission } = useLocation();
+  const { userLocation, getCurrentLocation, requestPermission, watchLocation } = useLocation();
   // Api Service
   const [bounds, setBounds] = useState<any>(null);
   const [stops, setStops] = useState<any[]>([]);
@@ -40,10 +40,23 @@ export default function Index() {
   // Settings modal
   const [showSettings, setShowSettings] = useState(false);
 
-  // Solicitar permissão ao montar
+  // Solicitar permissão ao montar e iniciar watch de localização
   useEffect(() => {
-    requestPermission();
-  }, [requestPermission]);
+    let subscription: any = null;
+    
+    const startLocationWatch = async () => {
+      await requestPermission();
+      subscription = await watchLocation();
+    };
+    
+    startLocationWatch();
+    
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [requestPermission, watchLocation]);
 
   // Centralizar no usuário ao iniciar
   useEffect(() => {
@@ -74,7 +87,6 @@ export default function Index() {
           zoom: 16,
         });
         setCameraMode('auto');
-        console.warn('camera mode changed to auto');
       }
     } catch (error) {
       console.error('Failed to get location:', error);
@@ -95,7 +107,6 @@ export default function Index() {
     setBounds(bounds);
     if (cameraMode === 'auto') {
       setCameraMode('free');
-      console.warn('camera mode changed to free');
     }
   };
 
@@ -170,6 +181,8 @@ export default function Index() {
           buses={buses}
           onBusMarkerPress={bus => Alert.alert('Ônibus', bus.title || bus.id)}
         />
+
+        {/* Botão de Localização */}
         <TouchableOpacity
           style={[styles.locateButton, { backgroundColor: appTheme === 'dark' ? '#333' : '#fff' }]}
           onPress={handleLocatePress}
@@ -181,6 +194,8 @@ export default function Index() {
             color={loading.location ? "#999" : "#007AFF"}
           />
         </TouchableOpacity>
+
+        {/* Botão de Configurações */}
         <TouchableOpacity
           style={[styles.configButton, { backgroundColor: appTheme === 'dark' ? '#333' : '#fff' }]}
           onPress={handleConfigPress}
@@ -193,6 +208,7 @@ export default function Index() {
         </TouchableOpacity>
       </View>
 
+      {/* Modal de Configurações */}
       <Modal
         visible={showSettings}
         transparent={true}
