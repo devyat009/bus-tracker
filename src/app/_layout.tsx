@@ -5,6 +5,7 @@ import BottomNavbar from "../components/NavBarComponent/bottom-navbar.component"
 import { useAppStore } from "../store";
 import Index from "./index";
 import Settings from "./settings";
+import StopsMenu from './stopsMenu';
 
 const RootLayout = () => {
   const [activeTab, setActiveTab] = useState('map');
@@ -14,6 +15,8 @@ const RootLayout = () => {
     switch (activeTab) {
       case 'settings':
         return <Settings />;
+      case 'stops':
+        return <StopsMenu />;
       default:
         return <Index />;
     }
