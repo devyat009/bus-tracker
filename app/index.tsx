@@ -101,7 +101,7 @@ export default function Index() {
     const fetchBuses = async () => {
       if (!bounds) return;
       try {
-        const result = await apiService.getBuses(bounds);
+        const result = await apiService.getEnhancedBuses(bounds);
         setBuses(result.map(bus => ({
           id: bus.id,
           latitude: bus.latitude,
@@ -112,6 +112,7 @@ export default function Index() {
           velocidade: bus.velocidade,
           sentido: bus.sentido,
           datalocal: bus.datalocal,
+          operadora: bus.operadora,
         })));
       } catch (error) {
         console.error('Erro ao buscar ônibus', error);

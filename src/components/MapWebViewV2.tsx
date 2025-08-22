@@ -25,6 +25,12 @@ interface BusMarker {
   velocidade?: number;
   sentido?: string;
   datalocal?: string;
+  operadora?: {
+    nome: string;
+    servico: string;
+    tipoOnibus: string;
+    dataReferencia: string;
+  };
 }
 
 interface MapLibreBasicProps {
@@ -139,7 +145,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
     fetchBuses(); // Busca inicial
     const interval = setInterval(fetchBuses, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [progressAnim]);
   
   return (
     <View style={[styles.container, style]}>
@@ -239,6 +245,11 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
             <Text style={[styles.popupSubtitle, { color: appTheme === 'dark' ? '#ccc' : '#666' }]}>
               Prefixo: {selectedBus.prefixo}
             </Text>
+            {selectedBus.operadora && (
+              <Text style={[styles.popupOperator, { color: appTheme === 'dark' ? '#4CAF50' : '#2E7D32' }]}>
+                Operadora: {selectedBus.operadora.nome}
+              </Text>
+            )}
             {selectedBus.velocidade && (
               <Text style={[styles.popupInfo, { color: appTheme === 'dark' ? '#ddd' : '#444' }]}>
                 Velocidade: {selectedBus.velocidade.toFixed(1)} km/h
@@ -290,6 +301,11 @@ const styles = StyleSheet.create({
   popupSubtitle: {
     fontSize: 12,
     marginTop: 4,
+  },
+  popupOperator: {
+    fontSize: 13,
+    marginTop: 4,
+    fontWeight: '600',
   },
   popupInfo: {
     fontSize: 12,

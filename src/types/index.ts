@@ -13,6 +13,16 @@ export interface Bus {
   active: boolean;
 }
 
+// Enhanced Bus with operator information from frota cache
+export interface EnhancedBus extends Bus {
+  operadora?: {
+    nome: string;
+    servico: string;
+    tipoOnibus: string;
+    dataReferencia: string;
+  };
+}
+
 export interface BusStop {
   id: string;
   codigo: string;
@@ -29,6 +39,15 @@ export interface BusLine {
   servico: string;
   coordinates: [number, number][]; // [lng, lat] format
   tipo: 'LineString' | 'MultiLineString';
+}
+
+export interface FrotaOperadora {
+  id: string;
+  dataReferencia: string;
+  servico: string;
+  operadora: string;
+  numeroVeiculo: string;
+  tipoOnibus: string;
 }
 
 export interface MapBounds {
@@ -115,6 +134,15 @@ export interface LineApiProperties {
   cod_linha?: string;
 }
 
+export interface FrotaApiProperties {
+  id_frota?: string,
+  data_referencia?: string,
+  servico?: string,
+  operadora?: string,
+  numero_veiculo?: string,
+  tipo_onibus?: string,
+}
+
 // App configuration
 export interface AppConfig {
   api: {
@@ -123,12 +151,19 @@ export interface AppConfig {
       buses: string;
       stops: string;
       lines: string;
+      frota: string;
     };
   };
   cache: {
     ttl: number; // Time to live in milliseconds
     maxSize: number;
   };
+}
+
+// Cache configuration
+export interface CacheOptions {
+  ttl?: number; // Time to live in milliseconds
+  forceRefresh?: boolean;
 }
 
 // Error types

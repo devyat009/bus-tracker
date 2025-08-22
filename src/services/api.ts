@@ -4,11 +4,15 @@ import {
   BusApiProperties,
   BusLine,
   BusStop,
+  EnhancedBus,
   ErrorCode,
+  FrotaApiProperties,
+  FrotaOperadora,
   LineApiProperties,
   MapBounds,
   StopApiProperties
 } from '../types';
+import { CACHE_KEYS, CacheOptions, getCachedOrFetch } from '../utils/asyncStorage';
 import appConfig from '../utils/config';
 
 class ApiError extends Error {
@@ -81,6 +85,51 @@ class ApiService {
       .filter(bus => bus !== null) as Bus[];
   }
 
+  /**
+   * Get buses enhanced with operator information from frota cache
+   * This method merges bus data with frota data based on prefixo/numeroVeiculo
+   */
+  async getEnhancedBuses(bounds?: MapBounds): Promise<EnhancedBus[]> {
+    // Get buses and frota data in parallel
+    const [buses, frota] = await Promise.all([
+      this.getBuses(bounds),
+      this.getFrotaCached() // Use cached frota data
+    ]);
+
+    // Create a map of numeroVeiculo -> FrotaOperadora for fast lookup
+    const frotaMap = new Map<string, FrotaOperadora>();
+    frota.forEach(item => {
+      if (item.numeroVeiculo) {
+        frotaMap.set(item.numeroVeiculo, item);
+      }
+    });
+
+    // Enhance buses with operator information
+    return buses.map(bus => this.enhanceBusWithOperator(bus, frotaMap));
+  }
+
+  /**
+   * Enhance a single bus with operator information
+   */
+  private enhanceBusWithOperator(bus: Bus, frotaMap: Map<string, FrotaOperadora>): EnhancedBus {
+    const frotaInfo = frotaMap.get(bus.prefixo);
+    
+    const enhancedBus: EnhancedBus = {
+      ...bus,
+    };
+
+    if (frotaInfo) {
+      enhancedBus.operadora = {
+        nome: frotaInfo.operadora,
+        servico: frotaInfo.servico,
+        tipoOnibus: frotaInfo.tipoOnibus,
+        dataReferencia: frotaInfo.dataReferencia,
+      };
+    }
+
+    return enhancedBus;
+  }
+
   async getStops(bounds?: MapBounds): Promise<BusStop[]> {
     let endpoint = appConfig.api.endpoints.stops;
     
@@ -107,6 +156,60 @@ class ApiService {
     return response.features
       .map(feature => this.transformLineFromApi(feature))
       .filter(line => line !== null) as BusLine[];
+  }
+
+  // Cached version of getLines - data persists for 3 days
+  async getLinesCached(options?: CacheOptions): Promise<BusLine[]> {
+    return getCachedOrFetch(
+      CACHE_KEYS.LINES,
+      () => this.getLines(),
+      options
+    );
+  }
+
+  async getFrota(): Promise<FrotaOperadora[]> {
+    const response = await this.makeRequest<FrotaOperadora>(
+      appConfig.api.endpoints.frota
+    );
+
+    return response.features
+      .map(feature => this.transformFrotaFromApi(feature))
+      .filter(frota => frota !== null) as FrotaOperadora[];
+  }
+
+  // Cached version of getFrota - data persists for 3 days
+  async getFrotaCached(options?: CacheOptions): Promise<FrotaOperadora[]> {
+    return getCachedOrFetch(
+      CACHE_KEYS.FROTA,
+      () => this.getFrota(),
+      options
+    );
+  }
+
+  // Cached version of getStops - data persists for shorter time as stops change more frequently
+  async getStopsCached(bounds?: MapBounds, options?: CacheOptions): Promise<BusStop[]> {
+    const cacheKey = bounds 
+      ? `${CACHE_KEYS.STOPS}_${bounds.north}_${bounds.south}_${bounds.east}_${bounds.west}`
+      : CACHE_KEYS.STOPS;
+    
+    return getCachedOrFetch(
+      cacheKey,
+      () => this.getStops(bounds),
+      { ttl: 30 * 60 * 1000, ...options } // 30 minutes default TTL for stops
+    );
+  }
+
+  private transformFrotaFromApi(feature: ApiResponse<FrotaApiProperties>['features'][0]): FrotaOperadora | null {
+    const { properties } = feature;
+
+    return {
+      id: properties.id_frota || '',
+      dataReferencia: properties.data_referencia || '',
+      servico: properties.servico || '',
+      operadora: properties.operadora || '',
+      numeroVeiculo: properties.numero_veiculo || '',
+      tipoOnibus: properties.tipo_onibus || '',
+    };
   }
 
   private transformBusFromApi(feature: ApiResponse<BusApiProperties>['features'][0]): Bus | null {
