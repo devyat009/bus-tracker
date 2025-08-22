@@ -20,8 +20,10 @@ export default function Index() {
     appTheme,
     showOnlyActiveBuses,
     showStops: showStopsStore,
+    showTraffic,
     setShowOnlyActiveBuses,
-    setShowStops: setShowStopsStore
+    setShowStops: setShowStopsStore,
+    setShowTraffic
   } = useAppStore();
 
   // Map center state
@@ -69,7 +71,7 @@ export default function Index() {
       setCameraMode('auto');
       setInitialized(true);
     }
-  }, [userLocation]);
+  }, [userLocation, initialized]);
 
   // Centralizar no usuário
   const handleLocatePress = async () => {
@@ -177,6 +179,8 @@ export default function Index() {
           onBusStopMarkerPress={marker => Alert.alert('Parada', marker.title || marker.id)}
           // Map change
           onRegionDidChange={handleRegionDidChange}
+          // Traffic
+          showTraffic={showTraffic}
           // Onibus
           buses={buses}
           onBusMarkerPress={bus => Alert.alert('Ônibus', bus.title || bus.id)}
@@ -248,6 +252,21 @@ export default function Index() {
                   true: appTheme === 'dark' ? '#81b0ff' : '#81b0ff' 
                 }}
                 thumbColor={showStopsStore ? (appTheme === 'dark' ? '#007AFF' : '#007AFF') : '#f4f3f4'}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <Text style={[styles.settingLabel, { color: appTheme === 'dark' ? '#fff' : '#333' }]}>
+                Mostrar trânsito
+              </Text>
+              <Switch
+                value={showTraffic}
+                onValueChange={setShowTraffic}
+                trackColor={{ 
+                  false: '#767577', 
+                  true: appTheme === 'dark' ? '#81b0ff' : '#81b0ff' 
+                }}
+                thumbColor={showTraffic ? (appTheme === 'dark' ? '#007AFF' : '#007AFF') : '#f4f3f4'}
               />
             </View>
 

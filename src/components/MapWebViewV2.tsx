@@ -1,11 +1,15 @@
 import {
   Camera,
+  LineLayer,
   MapView,
-  PointAnnotation
+  PointAnnotation,
+  ShapeSource
 } from '@maplibre/maplibre-react-native';
 import React, { useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { useTrafficData } from '../hooks/useTrafficData';
 import { useAppStore } from '../store';
+import { TrafficJam } from '../types';
 
 interface BusStopMarker {
   id: string;
@@ -42,6 +46,7 @@ interface MapLibreBasicProps {
   onRegionDidChange?: (bounds: {north: number, south: number, east: number, west: number}, center?: {latitude: number, longitude: number}, zoom?: number) => void;
   onBusStopMarkerPress?: (busStopMarker: BusStopMarker) => void;
   busStopMarker?: BusStopMarker[];
+  showTraffic?: boolean;
 
   buses?: BusMarker[];
   onBusMarkerPress?: (bus: BusMarker) => void;
@@ -59,6 +64,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   zoom,
   style = {},
   onRegionDidChange,
+  showTraffic = false,
 
   // Paradas de onibus
   busStopMarker = [],
@@ -73,9 +79,62 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
   const userLocation = useAppStore(state => state.userLocation);
   const [currentZoom, setCurrentZoom] = React.useState(zoom ?? 12);
   const [selectedBus, setSelectedBus] = useState<BusMarker | null>(null);
+  const [currentBounds, setCurrentBounds] = useState<{north: number, south: number, east: number, west: number} | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const [isFetching, setIsFetching] = React.useState(false);
   const progressAnim = React.useRef(new Animated.Value(0)).current;
+
+  // Hook para dados de trânsito
+  const { traffic } = useTrafficData({
+    enabled: showTraffic,
+    bounds: currentBounds || undefined,
+    updateInterval: 2, // Atualiza a cada 2 minutos
+  });
+
+  // Converter dados de trânsito para GeoJSON
+  const trafficGeoJSON = React.useMemo(() => {
+    if (!traffic || traffic.length === 0) {
+      return {
+        type: 'FeatureCollection' as const,
+        features: [],
+      };
+    }
+
+    const validFeatures = traffic
+      .filter((jam: TrafficJam) => {
+        // Verificar se tem coordenadas válidas
+        return jam.lines && 
+               Array.isArray(jam.lines) && 
+               jam.lines.length >= 2 &&
+               jam.lines.every(coord => 
+                 Array.isArray(coord) && 
+                 coord.length === 2 && 
+                 typeof coord[0] === 'number' && 
+                 typeof coord[1] === 'number'
+               );
+      })
+      .map((jam: TrafficJam) => ({
+        type: 'Feature' as const,
+        properties: {
+          id: jam.id,
+          street: jam.street,
+          level: jam.level,
+          color: jam.color,
+          speedKMH: jam.speedKMH,
+        },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: jam.lines,
+        },
+      }));
+
+    console.log(`Converted ${validFeatures.length} valid traffic features from ${traffic.length} total`);
+
+    return {
+      type: 'FeatureCollection' as const,
+      features: validFeatures,
+    };
+  }, [traffic]);
 
   // Atualiza o zoom quando a prop muda (ao recentralizar)
   React.useEffect(() => {
@@ -94,8 +153,12 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
         : undefined;
       const zoomLevel = event.properties.zoomLevel;
       setCurrentZoom(zoomLevel); // Atualiza o zoom local
-      onRegionDidChange({ north, south, east, west }, center, zoomLevel);
-
+      
+      // Atualiza os bounds para o traffic
+      const bounds = { north, south, east, west };
+      setCurrentBounds(bounds);
+      
+      onRegionDidChange(bounds, center, zoomLevel);
     }
   };
 
@@ -182,6 +245,28 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
           showsUserHeadingIndicator={true}
         /> */}
 
+        {/* Traffic Lines */}
+        {showTraffic && trafficGeoJSON.features.length > 0 && (
+          <ShapeSource id="traffic-source" shape={trafficGeoJSON}>
+            <LineLayer
+              id="traffic-lines"
+              style={{
+                lineColor: ['get', 'color'],
+                lineWidth: [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  10, 2,
+                  15, 4,
+                  18, 6
+                ],
+                lineOpacity: 0.8,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </ShapeSource>
+        )}
         
         {/* User location marker */}
         {userLocation && (

@@ -2,11 +2,13 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import BottomNavbar from "../components/BottomNavbar";
+import { useAppStore } from "../src/store";
 import Index from "./index";
 import Settings from "./settings";
 
 const RootLayout = () => {
   const [activeTab, setActiveTab] = useState('map');
+  const { appTheme } = useAppStore();
 
   const renderActiveScreen = () => {
     switch (activeTab) {
@@ -19,7 +21,7 @@ const RootLayout = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" hidden={false} translucent={false} />
+      <StatusBar style={appTheme === 'dark' ? 'light' : 'dark'} hidden={false} translucent={true} />
       <View style={styles.content}>
         {renderActiveScreen()}
       </View>

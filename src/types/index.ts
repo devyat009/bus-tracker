@@ -24,6 +24,25 @@ export interface EnhancedBus extends Bus {
   corOperadora?: string;
 }
 
+// Traffic data from Waze API
+export interface TrafficJam {
+  id: string;
+  street: string;
+  lines: [number, number][];
+  speedKMH: number;
+  level: number;
+  color: string; // Based on level
+  pubMillis: number;
+}
+
+export interface TrafficAlert {
+  id: string;
+  level: number;
+  color: string;
+  street?: string;
+  description?: string;
+}
+
 export interface BusStop {
   id: string;
   codigo: string;

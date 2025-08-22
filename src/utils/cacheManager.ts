@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CACHE_KEYS, clearCache, getCacheData, isCacheValid } from './asyncStorage';
 
 export class CacheManager {
@@ -102,5 +103,38 @@ export class CacheManager {
       clearCache(CACHE_KEYS.LINES),
       clearCache(CACHE_KEYS.FROTA),
     ]);
+  }
+
+  /**
+   * Generic cache-or-fetch function with configurable TTL
+   */
+  static async getCachedOrFetch<T>(
+    cacheKey: string,
+    fetchFunction: () => Promise<T>,
+    options: { ttl: number } = { ttl: 30 * 60 * 1000 } // Default 30 minutes
+  ): Promise<T> {
+    // Check if cached data exists and is valid
+    const isValid = await isCacheValid(cacheKey, options.ttl);
+    
+    if (isValid) {
+      const cachedData = await getCacheData(cacheKey);
+      if (cachedData) {
+        return cachedData as T;
+      }
+    }
+
+    // Fetch fresh data
+    const freshData = await fetchFunction();
+    
+    // Store in cache with timestamp
+    await clearCache(cacheKey);
+    const cacheData = {
+      data: freshData,
+      timestamp: Date.now(),
+    };
+    
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+
+    return freshData;
   }
 }

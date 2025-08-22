@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { AppTheme, Bus, BusLine, BusStop, MapState, MapStyle, UserLocation } from '../types';
+import { AppTheme, Bus, BusLine, BusStop, MapState, MapStyle, TrafficJam, UserLocation } from '../types';
 
 interface AppState extends MapState {
   // App theme (separate from map theme)
@@ -11,13 +11,18 @@ interface AppState extends MapState {
   buses: Bus[];
   stops: BusStop[];
   lines: BusLine[];
+  traffic: TrafficJam[];
   userLocation: UserLocation | null;
+  
+  // UI state
+  showTraffic: boolean;
   
   // Loading states
   loading: {
     buses: boolean;
     stops: boolean;
     lines: boolean;
+    traffic: boolean;
     location: boolean;
   };
   
@@ -26,6 +31,7 @@ interface AppState extends MapState {
     buses: string | null;
     stops: string | null;
     lines: string | null;
+    traffic: string | null;
     location: string | null;
   };
   
@@ -34,6 +40,7 @@ interface AppState extends MapState {
     buses: number | null;
     stops: number | null;
     lines: number | null;
+    traffic: number | null;
   };
   
   // Actions
@@ -44,6 +51,7 @@ interface AppState extends MapState {
   setShowBuses: (show: boolean) => void;
   setShowStops: (show: boolean) => void;
   setShowOnlyActiveBuses: (show: boolean) => void;
+  setShowTraffic: (show: boolean) => void;
   setSelectedLines: (lines: string[]) => void;
   addSelectedLine: (line: string) => void;
   removeSelectedLine: (line: string) => void;
@@ -51,6 +59,7 @@ interface AppState extends MapState {
   setBuses: (buses: Bus[]) => void;
   setStops: (stops: BusStop[]) => void;
   setLines: (lines: BusLine[]) => void;
+  setTraffic: (traffic: TrafficJam[]) => void;
   setUserLocation: (location: UserLocation | null) => void;
   
   setLoading: (key: keyof AppState['loading'], loading: boolean) => void;
@@ -74,12 +83,14 @@ const initialState = {
   showBuses: true,
   showStops: true,
   showOnlyActiveBuses: false,
+  showTraffic: false,
   selectedLines: [],
   
   // Data state
   buses: [],
   stops: [],
   lines: [],
+  traffic: [],
   userLocation: null,
   
   // Loading states
@@ -87,6 +98,7 @@ const initialState = {
     buses: false,
     stops: false,
     lines: false,
+    traffic: false,
     location: false,
   },
   
@@ -95,6 +107,7 @@ const initialState = {
     buses: null,
     stops: null,
     lines: null,
+    traffic: null,
     location: null,
   },
   
@@ -103,6 +116,7 @@ const initialState = {
     buses: null,
     stops: null,
     lines: null,
+    traffic: null,
   },
 };
 
@@ -134,6 +148,9 @@ export const useAppStore = create<AppState>()(
       
       setShowOnlyActiveBuses: (showOnlyActiveBuses) =>
         set({ showOnlyActiveBuses }),
+      
+      setShowTraffic: (showTraffic) =>
+        set({ showTraffic }),
       
       setSelectedLines: (selectedLines) =>
         set({ selectedLines }),
@@ -168,6 +185,12 @@ export const useAppStore = create<AppState>()(
           lines,
           lastUpdated: { ...get().lastUpdated, lines: Date.now() },
         }),
+
+      setTraffic: (traffic) =>
+        set({
+          traffic,
+          lastUpdated: { ...get().lastUpdated, traffic: Date.now() },
+        }),
       
       setUserLocation: (userLocation) =>
         set({ userLocation }),
@@ -190,6 +213,7 @@ export const useAppStore = create<AppState>()(
             buses: null,
             stops: null,
             lines: null,
+            traffic: null,
             location: null,
           },
         }),
@@ -199,11 +223,13 @@ export const useAppStore = create<AppState>()(
           buses: [],
           stops: [],
           lines: [],
+          traffic: [],
           userLocation: null,
           lastUpdated: {
             buses: null,
             stops: null,
             lines: null,
+            traffic: null,
           },
         }),
     }),
@@ -217,6 +243,7 @@ export const useAppStore = create<AppState>()(
         showBuses: state.showBuses,
         showStops: state.showStops,
         showOnlyActiveBuses: state.showOnlyActiveBuses,
+        showTraffic: state.showTraffic,
         selectedLines: state.selectedLines,
       }),
     }
