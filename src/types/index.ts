@@ -21,6 +21,7 @@ export interface EnhancedBus extends Bus {
     tipoOnibus: string;
     dataReferencia: string;
   };
+  corOperadora?: string;
 }
 
 export interface BusStop {

@@ -113,6 +113,7 @@ export default function Index() {
           sentido: bus.sentido,
           datalocal: bus.datalocal,
           operadora: bus.operadora,
+          corOperadora: bus.corOperadora,
         })));
       } catch (error) {
         console.error('Erro ao buscar ônibus', error);

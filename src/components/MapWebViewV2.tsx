@@ -220,12 +220,16 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
               <View style={{
                 width: 30,
                 height: 30,
-                backgroundColor: bus.corOperadora,
-                borderRadius: 13.5,
+                backgroundColor: bus.corOperadora || '#5a4799',
+                borderRadius: 15,
                 borderWidth: 2,
-                borderColor: '#a91a1aff',
+                borderColor: '#fff',
                 justifyContent: 'center',
                 alignItems: 'center',
+                shadowColor: '#000',
+                shadowOpacity: 0.3,
+                shadowRadius: 3,
+                shadowOffset: { width: 0, height: 1 },
               }} />
             </View>
           </PointAnnotation>
@@ -247,7 +251,7 @@ const MapLibreBasic: React.FC<MapLibreBasicProps> = ({
               Prefixo: {selectedBus.prefixo}
             </Text>
             {selectedBus.operadora && (
-              <Text style={[styles.popupOperator, { color: appTheme === 'dark' ? '#4CAF50' : '#2E7D32' }]}>
+              <Text style={[styles.popupOperator, { color: appTheme === 'dark' ? '#fff' : '#444' }]}>
                 Operadora: {selectedBus.operadora.nome}
               </Text>
             )}

@@ -116,16 +116,16 @@ class ApiService {
     
     // Mapeamento das operadoras principais e suas cores
     const operadorasPrincipais: { [key: string]: { nome: string; cor: string } } = {
-      'URBI': { nome: 'URBI', cor: '#2b97bbff' }, // Azul claro
+      'URBI': { nome: 'URBI', cor: '#00bfffff' }, // Azul claro
       'PIONEIRA': { nome: 'PIONEIRA', cor: '#ffff00' }, // Amarelo
       'PIRACICABANA': { nome: 'PIRACICABANA', cor: '#006400' }, // Verde escuro
-      'MARECHAL': { nome: 'MARECHAL', cor: '#fb6900f0' }, // Laranja
+      'MARECHAL': { nome: 'MARECHAL', cor: '#fb6900' }, // Laranja
       'SÃO JOSÉ': { nome: 'SÃO JOSÉ', cor: '#938326' }, // #938326
-      'UNIÃO TRANSPORTE BRASÍLIA': { nome: 'UNIÃO TRANSPORTE BRASÍLIA', cor: 'cyan' }, // Azul cyano
+      'UNIÃO TRANSPORTE BRASÍLIA': { nome: 'UNIÃO TRANSPORTE BRASÍLIA', cor: '#00ffff' }, // Azul cyano
     };
 
     let nomeOperadora = frotaInfo?.operadora || '';
-    let corOperadora = undefined;
+    let corOperadora: string | undefined = undefined;
 
     // Detecta e reduz o nome se for uma das principais
     let found = false;
@@ -137,9 +137,9 @@ class ApiService {
         break;
       }
     }
-    // Se não encontrou, mantém nome completo e cor indefinida
+    // Se não encontrou, mantém nome completo e cor padrão
     if (!found && nomeOperadora) {
-      corOperadora = undefined;
+      corOperadora = '#5a4799';
     }
 
     const enhancedBus: EnhancedBus = {
@@ -154,15 +154,6 @@ class ApiService {
         : undefined,
       corOperadora,
     };
-
-    // if (frotaInfo) {
-    //   enhancedBus.operadora = {
-    //     nome: frotaInfo.operadora,
-    //     servico: frotaInfo.servico,
-    //     tipoOnibus: frotaInfo.tipoOnibus,
-    //     dataReferencia: frotaInfo.dataReferencia,
-    //   };
-    // }
 
     return enhancedBus;
   }
